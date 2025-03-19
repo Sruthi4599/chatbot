@@ -1,98 +1,118 @@
 import streamlit as st
-import google.generativeai as genai
 import random
 
-# API Configuration
-API_KEY = "YOUR_GOOGLE_API_KEY"  # Replace with your actual API key
-genai.configure(api_key=API_KEY)
-model = genai.GenerativeModel('gemini-1.5-flash')
-
-# Initialize session state variables
+# Initialize session state
 if "messages" not in st.session_state:
     st.session_state.messages = []
-if "preferred_language" not in st.session_state:
-    st.session_state.preferred_language = None
 if "quiz_started" not in st.session_state:
     st.session_state.quiz_started = False
+if "quiz_completed" not in st.session_state:
+    st.session_state.quiz_completed = False
 if "quiz_questions" not in st.session_state:
     st.session_state.quiz_questions = []
 if "quiz_answers" not in st.session_state:
     st.session_state.quiz_answers = {}
 if "score" not in st.session_state:
     st.session_state.score = 0
-if "num_questions" not in st.session_state:
-    st.session_state.num_questions = 10  # Default to 10 questions
+if "selected_language" not in st.session_state:
+    st.session_state.selected_language = None
 
-# Predefined quiz questions (extend this list)
+# Predefined quiz questions and explanations
 quiz_data = {
     "Python": [
-        {"question": "What is the output of `print(2 ** 3)`?", "options": ["5", "6", "8", "10"], "answer": "8"},
-        {"question": "Which data type is mutable?", "options": ["Tuple", "String", "List", "Integer"], "answer": "List"},
-        {"question": "Which keyword is used to define a function?", "options": ["func", "def", "function", "define"], "answer": "def"},
-        {"question": "What is the correct file extension for Python files?", "options": [".py", ".java", ".cpp", ".txt"], "answer": ".py"},
-        {"question": "Which operator is used for floor division?", "options": ["/", "//", "%", "**"], "answer": "//"},
-        {"question": "Which function is used to get user input?", "options": ["input()", "scan()", "get()", "read()"], "answer": "input()"},
-        {"question": "Which data structure uses key-value pairs?", "options": ["List", "Tuple", "Dictionary", "Set"], "answer": "Dictionary"},
-        {"question": "Which module is used for regular expressions?", "options": ["re", "regex", "pyre", "reg"], "answer": "re"},
-        {"question": "What does `len()` return?", "options": ["Size of a list", "Memory address", "Last element", "None"], "answer": "Size of a list"},
-        {"question": "What is the default return value of a function?", "options": ["0", "None", "Empty string", "False"], "answer": "None"},
+        {"question": "What is the output of `print(2 ** 3)`?", "options": ["5", "6", "8", "10"], "answer": "8",
+         "explanation": "2 to the power of 3 is 8."},
+        {"question": "Which data type is mutable?", "options": ["Tuple", "String", "List", "Integer"], "answer": "List",
+         "explanation": "Lists are mutable, meaning they can be changed after creation."},
+        {"question": "What keyword is used to define a function?", "options": ["func", "def", "function", "define"], "answer": "def",
+         "explanation": "Python uses `def` to define functions."},
+        {"question": "What is the index of the first element in a Python list?", "options": ["1", "0", "-1", "Depends"], "answer": "0",
+         "explanation": "In Python, list indices start at 0."},
+        {"question": "Which library is used for data manipulation in Python?", "options": ["numpy", "pandas", "matplotlib", "seaborn"], "answer": "pandas",
+         "explanation": "Pandas is commonly used for data manipulation and analysis."},
     ],
     "Java": [
-        {"question": "Which keyword is used to inherit a class?", "options": ["implements", "extends", "inherits", "super"], "answer": "extends"},
-        {"question": "What is the default value of an int variable?", "options": ["0", "null", "undefined", "1"], "answer": "0"},
-        {"question": "Which method is the entry point in a Java program?", "options": ["start()", "main()", "run()", "begin()"], "answer": "main()"},
-        {"question": "Which keyword is used to define a constant?", "options": ["final", "const", "static", "immutable"], "answer": "final"},
-        {"question": "Which Java collection allows duplicates?", "options": ["Set", "List", "Map", "Queue"], "answer": "List"},
-        {"question": "What does JVM stand for?", "options": ["Java Virtual Machine", "Java Variable Memory", "Java Version Manager", "Java Visual Mode"], "answer": "Java Virtual Machine"},
-        {"question": "Which loop is used when the number of iterations is known?", "options": ["for", "while", "do-while", "foreach"], "answer": "for"},
-        {"question": "Which exception is thrown when a null object is accessed?", "options": ["NullPointerException", "IOException", "ArithmeticException", "RuntimeException"], "answer": "NullPointerException"},
-        {"question": "What is used to create an object in Java?", "options": ["new", "create", "malloc", "alloc"], "answer": "new"},
-        {"question": "Which access modifier allows visibility only within the same class?", "options": ["public", "private", "protected", "default"], "answer": "private"},
+        {"question": "Which keyword is used to inherit a class?", "options": ["implements", "extends", "inherits", "super"], "answer": "extends",
+         "explanation": "In Java, `extends` is used for class inheritance."},
+        {"question": "What is the default value of an int variable?", "options": ["0", "null", "undefined", "1"], "answer": "0",
+         "explanation": "Java initializes `int` variables with 0 by default."},
+        {"question": "Which method is called when an object is created?", "options": ["constructor", "main", "init", "start"], "answer": "constructor",
+         "explanation": "Constructors are called when an object is instantiated."},
+    ],
+    "C++": [
+        {"question": "Which operator is used for dynamic memory allocation?", "options": ["malloc", "new", "alloc", "create"], "answer": "new",
+         "explanation": "The `new` operator is used for dynamic memory allocation in C++."},
+        {"question": "Which is the correct file extension for C++ programs?", "options": [".c", ".cpp", ".java", ".py"], "answer": ".cpp",
+         "explanation": "C++ files usually have the `.cpp` extension."},
+    ],
+    "JavaScript": [
+        {"question": "Which keyword is used to declare a constant?", "options": ["var", "let", "const", "static"], "answer": "const",
+         "explanation": "`const` is used to declare constants in JavaScript."},
+        {"question": "Which function converts a string to an integer?", "options": ["parseInt()", "toInteger()", "stringToInt()", "int()"], "answer": "parseInt()",
+         "explanation": "`parseInt()` converts a string to an integer in JavaScript."},
     ]
 }
 
-# Display chatbot UI
-st.title("🤖 AI Programming Assistant")
-st.write("Welcome! Ask me about programming languages, tutorials, or quizzes.")
+# Programming language resources
+resources = {
+    "Python": {
+        "Books": ["Python Crash Course", "Automate the Boring Stuff", "Fluent Python"],
+        "Websites": ["https://docs.python.org", "https://realpython.com", "https://www.geeksforgeeks.org/python"],
+        "Videos": ["https://www.youtube.com/watch?v=_uQrJ0TkZlc", "https://www.youtube.com/watch?v=rfscVS0vtbw"]
+    },
+    "Java": {
+        "Books": ["Effective Java", "Head First Java", "Java: The Complete Reference"],
+        "Websites": ["https://docs.oracle.com/en/java/", "https://www.geeksforgeeks.org/java"],
+        "Videos": ["https://www.youtube.com/watch?v=grEKMHGYyns", "https://www.youtube.com/watch?v=eIrMbAQSU34"]
+    }
+}
 
-# Display conversation history
+# Chatbot title
+st.title("🤖 CodeMate - Your AI Chatbot")
+
+# Display chat history
 for message in st.session_state.messages:
-    with st.chat_message(message["role"]):
-        st.markdown(message["content"])
+    st.chat_message(message["role"]).write(message["content"])
 
-# Process user input
-if user_input := st.chat_input("Type a message..."):
+# User input
+user_input = st.chat_input("Type a message...")
+
+if user_input:
     st.session_state.messages.append({"role": "user", "content": user_input})
-    with st.chat_message("user"):
-        st.markdown(user_input)
-
-    response_text = ""
 
     # Greetings
-    if user_input.lower() in ["hello", "hi", "hey"]:
-        response_text = "Hello! How can I assist you today?"
+    greetings = ["hi", "hello", "hey"]
+    if any(greet in user_input.lower() for greet in greetings):
+        response = "Hello! How can I assist you today?"
 
-    # Detect language request
+    # Detect language and ask for intent
     elif any(lang.lower() in user_input.lower() for lang in quiz_data.keys()):
-        detected_lang = next(lang for lang in quiz_data.keys() if lang.lower() in user_input.lower())
-        st.session_state.preferred_language = detected_lang
-        response_text = f"Do you want to **learn** about {detected_lang} or attempt a **quiz**?"
+        for lang in quiz_data.keys():
+            if lang.lower() in user_input.lower():
+                st.session_state.selected_language = lang
+                break
+        response = f"Do you want to learn {st.session_state.selected_language} or attempt a quiz?"
 
-    # Start quiz
-    elif "quiz" in user_input.lower() and st.session_state.preferred_language:
-        lang = st.session_state.preferred_language
+    # Provide learning resources
+    elif "learn" in user_input.lower() and st.session_state.selected_language:
+        lang = st.session_state.selected_language
+        response = f"Here are some learning resources for {lang}:\n\n"
+        response += "**Books:**\n" + "\n".join(f"- {book}" for book in resources[lang]["Books"]) + "\n\n"
+        response += "**Websites:**\n" + "\n".join(f"- {site}" for site in resources[lang]["Websites"]) + "\n\n"
+        response += "**Videos:**\n" + "\n".join(f"- {video}" for video in resources[lang]["Videos"])
+
+    # Start a quiz
+    elif "quiz" in user_input.lower() and st.session_state.selected_language:
+        lang = st.session_state.selected_language
+        st.session_state.quiz_questions = random.sample(quiz_data[lang], min(10, len(quiz_data[lang])))
         st.session_state.quiz_started = True
-        st.session_state.quiz_questions = random.sample(quiz_data[lang], min(st.session_state.num_questions, len(quiz_data[lang])))
+        st.session_state.quiz_completed = False
+        st.session_state.score = 0
         st.session_state.quiz_answers = {q["question"]: "" for q in st.session_state.quiz_questions}
-        response_text = f"Starting a **{lang}** quiz! Answer the following {st.session_state.num_questions} questions:"
+        response = f"Starting {lang} quiz. Answer the following questions:"
 
-    # Allow user to request more questions
-    elif any(word in user_input.lower() for word in ["more", "increase", "add"]):
-        st.session_state.num_questions += 5  # Increase by 5
-        response_text = f"Okay! Your next quiz will have **{st.session_state.num_questions}** questions."
-
-    # Handle quiz questions
-    if st.session_state.quiz_started:
+    # Answer quiz questions
+    elif st.session_state.quiz_started and not st.session_state.quiz_completed:
         for q in st.session_state.quiz_questions:
             selected_answer = st.radio(q["question"], q["options"], key=q["question"])
             st.session_state.quiz_answers[q["question"]] = selected_answer
@@ -101,11 +121,19 @@ if user_input := st.chat_input("Type a message..."):
             st.session_state.score = sum(
                 1 for q in st.session_state.quiz_questions if st.session_state.quiz_answers[q["question"]] == q["answer"]
             )
-            response_text = f"🎉 Your Final Score: **{st.session_state.score}/{len(st.session_state.quiz_questions)}**\n\n"
-            response_text += "Would you like another quiz?"
+            st.session_state.quiz_completed = True
+            response = f"🎉 Your Final Score: {st.session_state.score}/{len(st.session_state.quiz_questions)}"
 
-    # Store and display assistant response
-    if response_text:
-        st.session_state.messages.append({"role": "assistant", "content": response_text})
-        with st.chat_message("assistant"):
-            st.markdown(response_text)
+    # Provide explanations
+    elif "explain" in user_input.lower():
+        for q in st.session_state.quiz_questions:
+            if q["question"] in user_input:
+                response = f"Explanation: {q['explanation']}"
+                break
+
+    # Default response
+    else:
+        response = "I'm not sure how to respond to that. Try asking about programming languages, learning, or quizzes."
+
+    st.chat_message("assistant").write(response)
+    st.session_state.messages.append({"role": "assistant", "content": response})
