@@ -78,21 +78,21 @@ if user_input := st.chat_input("Type a message..."):
     elif any(lang in user_input.lower() for lang in resources.keys()):
         detected_lang = next(lang for lang in resources.keys() if lang in user_input)
         st.session_state.preferred_language = detected_lang
-        response_text = f"Do you want to learn about {detected_lang} or attempt a quiz?"
+        response_text = f"Do you want to **learn** about {detected_lang} or attempt a **quiz**?"
 
     # Provide learning resources
     elif "learn" in user_input.lower() and st.session_state.preferred_language:
         lang = st.session_state.preferred_language
-        response_text = f"Here are some {lang} learning resources:\n\n"
+        response_text = f"Here are some **{lang}** learning resources:\n\n"
 
-        response_text += "**Books:**\n"
+        response_text += "**📚 Books:**\n"
         response_text += "\n".join([f"- {book}" for book in resources[lang]["books"]]) + "\n\n"
 
-        response_text += "**Websites:**\n"
-        response_text += "\n".join([f"- {site}" for site in resources[lang]["websites"]]) + "\n\n"
+        response_text += "**🌐 Websites:**\n"
+        response_text += "\n".join([f"- [{site}]({site})" for site in resources[lang]["websites"]]) + "\n\n"
 
-        response_text += "**YouTube Videos:**\n"
-        response_text += "\n".join([f"- {vid}" for vid in resources[lang]["videos"]])
+        response_text += "**🎥 YouTube Videos:**\n"
+        response_text += "\n".join([f"- [{vid}]({vid})" for vid in resources[lang]["videos"]])
 
     # Start quiz
     elif "quiz" in user_input.lower() and st.session_state.preferred_language:
@@ -100,9 +100,9 @@ if user_input := st.chat_input("Type a message..."):
         st.session_state.quiz_started = True
         st.session_state.quiz_questions = random.sample(quiz_data[lang], min(10, len(quiz_data[lang])))
         st.session_state.quiz_answers = {q["question"]: "" for q in st.session_state.quiz_questions}
-        response_text = f"Starting a {lang} quiz! Answer the following questions:"
+        response_text = f"Starting a **{lang}** quiz! Answer the following questions:"
 
-    # Handle quiz
+    # Handle quiz display
     if st.session_state.quiz_started:
         for q in st.session_state.quiz_questions:
             selected_answer = st.radio(q["question"], q["options"], key=q["question"])
@@ -112,10 +112,11 @@ if user_input := st.chat_input("Type a message..."):
             st.session_state.score = sum(
                 1 for q in st.session_state.quiz_questions if st.session_state.quiz_answers[q["question"]] == q["answer"]
             )
-            response_text = f"🎉 Your Final Score: {st.session_state.score}/{len(st.session_state.quiz_questions)}\n\n"
+            response_text = f"🎉 Your Final Score: **{st.session_state.score}/{len(st.session_state.quiz_questions)}**\n\n"
             response_text += "Would you like to try another quiz?"
 
-    # Store assistant response
-    st.session_state.messages.append({"role": "assistant", "content": response_text})
-    with st.chat_message("assistant"):
-        st.markdown(response_text)
+    # Store assistant response properly
+    if response_text:
+        st.session_state.messages.append({"role": "assistant", "content": response_text})
+        with st.chat_message("assistant"):
+            st.markdown(response_text)
