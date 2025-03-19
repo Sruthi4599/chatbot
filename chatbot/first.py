@@ -1,3 +1,5 @@
+pip install streamlit google-generativeai
+streamlit run chatbot.py
 import streamlit as st
 import google.generativeai as genai
 
