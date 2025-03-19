@@ -21,7 +21,7 @@ if "quiz_answers" not in st.session_state:
 if "score" not in st.session_state:
     st.session_state.score = 0
 
-st.title("🤖 BookMate - Your AI Assistant")
+st.title("🤖 CodeGenie - Your AI Assistant")
 st.write("Welcome! I can recommend programming resources and quiz you.")
 
 # Step 1: Ask for preferred programming language
