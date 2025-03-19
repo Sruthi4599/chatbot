@@ -1,114 +1,121 @@
 import streamlit as st
 import google.generativeai as genai
 
-# Configure Google API
+# API Configuration
 API_KEY = "YOUR_GOOGLE_API_KEY"
 genai.configure(api_key=API_KEY)
-model = genai.GenerativeModel("gemini-1.5-flash")
+model = genai.GenerativeModel('gemini-1.5-flash')
 
-# Initialize session state
+if "chat" not in st.session_state:
+    st.session_state.chat = model.start_chat(history=[])
+
 if "messages" not in st.session_state:
     st.session_state.messages = []
-if "preferred_language" not in st.session_state:
-    st.session_state.preferred_language = None
+
 if "quiz_started" not in st.session_state:
     st.session_state.quiz_started = False
+
+if "quiz_completed" not in st.session_state:
+    st.session_state.quiz_completed = False
+
 if "quiz_questions" not in st.session_state:
     st.session_state.quiz_questions = []
+
 if "quiz_answers" not in st.session_state:
     st.session_state.quiz_answers = {}
+
 if "score" not in st.session_state:
     st.session_state.score = 0
-if "question_count" not in st.session_state:
-    st.session_state.question_count = 10  # Default 10 questions
 
-st.title("🤖 AI Learning Assistant")
-st.write("Type your request in the chat below!")
+if "quiz_language" not in st.session_state:
+    st.session_state.quiz_language = None
 
-# Display chat history
+st.title("🤖 BookMate - Your AI Assistant")
+st.write("Welcome! Ask me anything about programming or request a quiz.")
+
+# Display conversation history
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
 
 # User Input
-if user_input := st.chat_input("Type here..."):
+if prompt := st.chat_input("Say something..."):
+    # Add user message to chat history
+    st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
-        st.markdown(user_input)
-    st.session_state.messages.append({"role": "user", "content": user_input})
+        st.markdown(prompt)
 
-    # Detect learning interest
-    if "learn" in user_input.lower():
-        for lang in ["Python", "Java", "C++", "JavaScript"]:
-            if lang.lower() in user_input.lower():
-                st.session_state.preferred_language = lang
-                st.session_state.quiz_started = False
-                st.session_state.quiz_questions = []
-                st.session_state.quiz_answers = {}
-                st.session_state.score = 0
+    # Detect greetings
+    greetings = ["hi", "hello", "hey", "good morning", "good evening"]
+    if any(greet in prompt.lower() for greet in greetings):
+        response_text = "Hello! How can I assist you today?"
+    
+    # Detect programming language request
+    elif "learn" in prompt.lower():
+        languages = ["Python", "Java", "C++", "JavaScript"]
+        for lang in languages:
+            if lang.lower() in prompt.lower():
+                st.session_state.quiz_language = lang
+                response_text = f"Great choice! Here are some {lang} resources:\n\n"
+                response_text += f"📹 **YouTube Video**: [Learn {lang}](https://www.youtube.com/results?search_query=learn+{lang})\n"
+                response_text += f"🌍 **Website**: [GeeksforGeeks {lang}](https://www.geeksforgeeks.org/{lang}/)\n"
+                response_text += "📚 **Recommended Books:**\n"
+
+                book_recommendations = {
+                    "Python": ["Python Crash Course", "Automate the Boring Stuff", "Python Cookbook"],
+                    "Java": ["Effective Java", "Head First Java", "Java: The Complete Reference"],
+                    "C++": ["The C++ Programming Language", "Accelerated C++", "C++ Primer"],
+                    "JavaScript": ["Eloquent JavaScript", "JavaScript: The Good Parts", "You Don't Know JS"]
+                }
+
+                for book in book_recommendations[lang]:
+                    response_text += f"- {book}\n"
                 break
-        
-        if st.session_state.preferred_language:
-            recommendations = {
-                "Python": ["Python Crash Course", "Automate the Boring Stuff", "LeetCode Python Challenges", "Python Docs", "Python for Data Science"],
-                "Java": ["Effective Java", "Head First Java", "Java Programming on GeeksforGeeks", "Java: The Complete Reference"],
-                "C++": ["The C++ Programming Language", "Accelerated C++", "C++ Primer", "C++ STL Documentation"],
-                "JavaScript": ["Eloquent JavaScript", "JavaScript: The Good Parts", "You Don't Know JS", "MDN JavaScript Guide"]
-            }
-            response_text = f"Here are some {st.session_state.preferred_language} learning resources:\n"
-            response_text += "\n".join(f"- {rec}" for rec in recommendations[st.session_state.preferred_language])
         else:
-            response_text = "I can recommend programming tutorials! Just type 'I want to learn Python' or another language."
+            response_text = "I can recommend resources for Python, Java, C++, and JavaScript. Which language are you interested in?"
 
     # Detect quiz request
-    elif "quiz" in user_input.lower():
-        if st.session_state.preferred_language:
-            lang = st.session_state.preferred_language
+    elif "quiz" in prompt.lower():
+        if st.session_state.quiz_language is None:
+            response_text = "Please specify a programming language for the quiz. Example: 'I want to attempt a Python quiz.'"
+        else:
+            lang = st.session_state.quiz_language
             st.session_state.quiz_started = True
+            st.session_state.quiz_completed = False
             st.session_state.score = 0
 
+            # Sample Quiz Questions
             quiz_data = {
                 "Python": [
                     {"question": "What is the output of `print(2 ** 3)`?", "options": ["5", "6", "8", "10"], "answer": "8"},
                     {"question": "Which data type is mutable?", "options": ["Tuple", "String", "List", "Integer"], "answer": "List"},
-                    {"question": "What is the default value of a variable in Python?", "options": ["None", "0", "Depends on type", "Not defined"], "answer": "Not defined"},
-                    {"question": "Which loop is used to iterate over items in a list?", "options": ["for", "while", "do-while", "foreach"], "answer": "for"},
-                    {"question": "What does `len([])` return?", "options": ["None", "0", "1", "Error"], "answer": "0"}
-                ],
-                "Java": [
-                    {"question": "Which keyword is used to inherit a class?", "options": ["implements", "extends", "inherits", "super"], "answer": "extends"},
-                    {"question": "What is the default value of an int variable?", "options": ["0", "null", "undefined", "1"], "answer": "0"}
-                ],
-                "C++": [
-                    {"question": "Which operator is used for dynamic memory allocation?", "options": ["malloc", "new", "alloc", "create"], "answer": "new"},
-                    {"question": "Which is the correct file extension for C++ programs?", "options": [".c", ".cpp", ".java", ".py"], "answer": ".cpp"}
-                ],
-                "JavaScript": [
-                    {"question": "Which keyword is used to declare a constant?", "options": ["var", "let", "const", "static"], "answer": "const"},
-                    {"question": "Which function converts a string to an integer?", "options": ["parseInt()", "toInteger()", "stringToInt()", "int()"], "answer": "parseInt()"}
+                    {"question": "What keyword is used to define a function?", "options": ["func", "def", "define", "function"], "answer": "def"},
+                    {"question": "Which module is used for regular expressions in Python?", "options": ["regex", "re", "match", "reg"], "answer": "re"},
+                    {"question": "What is the index of the first element in a Python list?", "options": ["1", "0", "-1", "None"], "answer": "0"},
+                    {"question": "Which loop is used to iterate over a sequence?", "options": ["for", "while", "do-while", "repeat"], "answer": "for"},
+                    {"question": "What is the correct file extension for Python files?", "options": [".py", ".python", ".pt", ".p"], "answer": ".py"},
+                    {"question": "What is the output of `print(type([]))`?", "options": ["dict", "list", "tuple", "set"], "answer": "list"},
+                    {"question": "Which keyword is used to handle exceptions in Python?", "options": ["catch", "handle", "try", "except"], "answer": "try"},
+                    {"question": "How do you start a comment in Python?", "options": ["//", "/*", "#", "--"], "answer": "#"}
                 ]
             }
 
-            st.session_state.quiz_questions = quiz_data.get(lang, [])[:st.session_state.question_count]
+            st.session_state.quiz_questions = quiz_data.get(lang, [])[:10]  # Default 10 questions
             st.session_state.quiz_answers = {q["question"]: "" for q in st.session_state.quiz_questions}
-            response_text = f"Here is your {lang} quiz with {st.session_state.question_count} questions. Answer them below!"
+            response_text = f"Starting {lang} quiz! Please answer the following questions."
 
-        else:
-            response_text = "Please specify a language before attempting a quiz! Example: 'I want to attempt Python quiz'."
-
-    # Detect request for more questions
-    elif "more questions" in user_input.lower():
-        st.session_state.question_count += 5
-        response_text = f"Okay! I'll now provide {st.session_state.question_count} questions in your quiz."
-
+    # Handle regular conversation with AI
     else:
-        response_text = model.generate_content(user_input).text
+        response = st.session_state.chat.send_message(prompt)
+        response_text = response.text
 
+    # Add assistant response to chat history
+    st.session_state.messages.append({"role": "assistant", "content": response_text})
     with st.chat_message("assistant"):
         st.markdown(response_text)
-    st.session_state.messages.append({"role": "assistant", "content": response_text})
 
-# Display Quiz
-if st.session_state.quiz_started:
+# Display Quiz if started
+if st.session_state.quiz_started and not st.session_state.quiz_completed:
     st.write("### Quiz Time! Choose the correct answers:")
     
     for q in st.session_state.quiz_questions:
@@ -116,16 +123,18 @@ if st.session_state.quiz_started:
         st.session_state.quiz_answers[q["question"]] = selected_answer
 
     if st.button("Submit Quiz"):
-        # Calculate score
+        # Calculate Score
         st.session_state.score = sum(
             1 for q in st.session_state.quiz_questions if st.session_state.quiz_answers[q["question"]] == q["answer"]
         )
-        st.session_state.quiz_started = False
-        response_text = f"🎉 Your Final Score: {st.session_state.score}/{len(st.session_state.quiz_questions)}"
-        with st.chat_message("assistant"):
-            st.markdown(response_text)
-        st.session_state.messages.append({"role": "assistant", "content": response_text})
+        st.session_state.quiz_completed = True
 
-    if st.button("More Questions"):
-        st.session_state.question_count += 5
+# Display Final Score
+if st.session_state.quiz_completed:
+    st.write(f"### 🎉 Your Final Score: {st.session_state.score}/{len(st.session_state.quiz_questions)}")
+    if st.button("Retry Quiz"):
         st.session_state.quiz_started = False
+        st.session_state.quiz_completed = False
+        st.session_state.quiz_questions = []
+        st.session_state.quiz_answers = {}
+        st.session_state.score = 0
