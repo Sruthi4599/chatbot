@@ -9,12 +9,13 @@ model = genai.GenerativeModel('gemini-1.5-flash')
 # Supported programming languages
 SUPPORTED_LANGUAGES = ["Python", "Java", "C++", "JavaScript"]
 
-# Initialize chat history
+# Initialize chat history and quiz state
 if "chat" not in st.session_state:
     st.session_state.chat = model.start_chat(history=[])
-
 if "messages" not in st.session_state:
     st.session_state.messages = []
+if "quiz" not in st.session_state:
+    st.session_state.quiz = None  # Stores quiz questions and answers
 
 st.title("🤖 CodeMat - Your AI Learning Assistant")
 st.write("Welcome! Learn programming or test your knowledge with quizzes.")
@@ -39,29 +40,39 @@ def extract_language(prompt):
             return lang
     return None
 
-# Function to generate quiz questions with explanations
+# Function to generate quiz questions with options, correct answers, and explanations
 def generate_quiz(language):
     prompt = f"""
-    Generate 10 multiple-choice quiz questions on {language}. 
-    Each question should have four options labeled (a), (b), (c), (d), indicate the correct answer, and provide a brief explanation.
+    Generate a 10-question multiple-choice quiz on {language}. 
+    Each question should have four options (a, b, c, d), the correct answer, and an explanation.
     Format:
-    Question: <question>
+    Question: <question text>
     a) <option1>
     b) <option2>
     c) <option3>
     d) <option4>
-    Answer: <correct option>
-    Explanation: <explanation>
+    Answer: <correct option letter>
+    Explanation: <brief explanation>
     """
     response = model.generate_content(prompt)
-    quiz_data = response.text.split("\n\n")  # Splitting questions properly
-    st.session_state.quiz = {"questions": [], "current_index": 0, "score": 0}  # Reset quiz state
-    
+    quiz_data = response.text.split("\n\n")  # Splitting into individual questions
+
+    st.session_state.quiz = {
+        "questions": [],
+        "current_index": 0,
+        "score": 0
+    }  # Reset quiz state
+
     for q in quiz_data:
-        lines = q.split("\n")
-        if len(lines) >= 7:
+        lines = q.strip().split("\n")
+        if len(lines) >= 6:
             question = lines[0].replace("Question: ", "").strip()
-            options = [lines[1], lines[2], lines[3], lines[4]]
+            options = {
+                "a": lines[1].replace("a) ", "").strip(),
+                "b": lines[2].replace("b) ", "").strip(),
+                "c": lines[3].replace("c) ", "").strip(),
+                "d": lines[4].replace("d) ", "").strip()
+            }
             correct = lines[5].replace("Answer: ", "").strip().lower()
             explanation = lines[6].replace("Explanation: ", "").strip()
             st.session_state.quiz["questions"].append({
@@ -84,20 +95,22 @@ def explain_answer(question):
 
 # Function to display and handle quiz interaction
 def display_quiz():
-    if "quiz" in st.session_state and st.session_state.quiz["questions"]:
+    if "quiz" in st.session_state and st.session_state.quiz:
         idx = st.session_state.quiz["current_index"]
-        if idx < len(st.session_state.quiz["questions"]):
+        total_questions = len(st.session_state.quiz["questions"])
+
+        if idx < total_questions:
             q_data = st.session_state.quiz["questions"][idx]
-            st.write(f"**{q_data['question']}**")
+            st.write(f"**{idx + 1}. {q_data['question']}**")  # Display question number
             
-            # Display options properly
-            for option in q_data["options"]:
-                st.write(option)
+            # Display options
+            for key, value in q_data["options"].items():
+                st.write(f"**{key})** {value}")
 
             # Answer input
             user_answer = st.text_input("Enter your answer (a/b/c/d):", key=f"quiz_{idx}")
             if user_answer:
-                correct_ans = q_data["correct"].strip().lower()
+                correct_ans = q_data["correct"]
                 if user_answer.lower() == correct_ans:
                     st.success("✅ Correct!")
                     st.session_state.quiz["score"] += 1
@@ -107,10 +120,11 @@ def display_quiz():
 
                 # Move to next question
                 st.session_state.quiz["current_index"] += 1
+                st.experimental_rerun()  # Refresh the page to show the next question
 
         else:
-            st.write(f"🎉 Quiz finished! Your final score: {st.session_state.quiz['score']}/{len(st.session_state.quiz['questions'])}")
-            del st.session_state.quiz  # Reset quiz
+            st.write(f"🎉 Quiz completed! Your final score: **{st.session_state.quiz['score']}/{total_questions}**")
+            del st.session_state.quiz  # Reset quiz after completion
 
 # Display chat history
 for message in st.session_state.messages:
