@@ -3,7 +3,7 @@ import streamlit as st
 import random
 
 # Set OpenAI API Key
-openai.api_key = "YOUR_OPENAI_API_KEY"  # Replace with your actual API key
+openai.api_key = "AIzaSyD9ZPsFRIDK5oaXbZriD_Ib1CjGzV0mejk"  # Replace with your actual API key
 
 # Initialize session state variables
 if "messages" not in st.session_state:
