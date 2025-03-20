@@ -39,20 +39,34 @@ def extract_language(prompt):
             return lang
     return None
 
-# Function to generate quiz questions
+# Function to generate quiz questions with explanations
 def generate_quiz(language):
-    prompt = f"Generate 10 multiple-choice quiz questions on {language}. Each question should have four options labeled (a), (b), (c), (d) and indicate the correct answer."
+    prompt = f"""
+    Generate 10 multiple-choice quiz questions on {language}. 
+    Each question should have four options labeled (a), (b), (c), (d), indicate the correct answer, and provide a brief explanation.
+    Format:
+    Question: <question>
+    a) <option1>
+    b) <option2>
+    c) <option3>
+    d) <option4>
+    Answer: <correct option>
+    Explanation: <explanation>
+    """
     response = model.generate_content(prompt)
     quiz_data = response.text.split("\n\n")  # Splitting questions properly
     st.session_state.quiz = {"questions": [], "current_index": 0, "score": 0}  # Reset quiz state
     
     for q in quiz_data:
         lines = q.split("\n")
-        if len(lines) >= 5:
-            question = lines[0]  # Question
-            options = lines[1:5]  # Options
-            correct = lines[5] if len(lines) > 5 else ""  # Correct answer if available
-            st.session_state.quiz["questions"].append({"question": question, "options": options, "correct": correct})
+        if len(lines) >= 7:
+            question = lines[0].replace("Question: ", "").strip()
+            options = [lines[1], lines[2], lines[3], lines[4]]
+            correct = lines[5].replace("Answer: ", "").strip().lower()
+            explanation = lines[6].replace("Explanation: ", "").strip()
+            st.session_state.quiz["questions"].append({
+                "question": question, "options": options, "correct": correct, "explanation": explanation
+            })
 
     return "Quiz generated! Enter your answers (a/b/c/d) below."
 
@@ -75,6 +89,8 @@ def display_quiz():
         if idx < len(st.session_state.quiz["questions"]):
             q_data = st.session_state.quiz["questions"][idx]
             st.write(f"**{q_data['question']}**")
+            
+            # Display options properly
             for option in q_data["options"]:
                 st.write(option)
 
@@ -87,6 +103,7 @@ def display_quiz():
                     st.session_state.quiz["score"] += 1
                 else:
                     st.error(f"❌ Wrong! The correct answer is {correct_ans.upper()}")
+                    st.info(f"ℹ️ Explanation: {q_data['explanation']}")
 
                 # Move to next question
                 st.session_state.quiz["current_index"] += 1
