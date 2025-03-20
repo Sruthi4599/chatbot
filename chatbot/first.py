@@ -6,6 +6,9 @@ API_KEY = "YOUR_GEMINI_API_KEY"
 genai.configure(api_key=API_KEY)
 model = genai.GenerativeModel('gemini-1.5-flash')
 
+# Supported programming languages
+SUPPORTED_LANGUAGES = ["Python", "Java", "C++", "JavaScript"]
+
 # Initialize chat history
 if "chat" not in st.session_state:
     st.session_state.chat = model.start_chat(history=[])
@@ -28,6 +31,13 @@ def detect_intent(prompt):
     elif "explain" in prompt.lower():
         return "explain"
     return "chat"
+
+# Function to extract programming language
+def extract_language(prompt):
+    for lang in SUPPORTED_LANGUAGES:
+        if lang.lower() in prompt.lower():
+            return lang
+    return None
 
 # Function to generate quiz questions
 def generate_quiz(language):
@@ -55,15 +65,20 @@ for message in st.session_state.messages:
 # Chat input
 if prompt := st.chat_input("Say something..."):
     intent = detect_intent(prompt)
-
+    language = extract_language(prompt)
+    
     if intent == "greeting":
         response_text = "Hello! How can I assist you today?"
     elif intent == "learn":
-        language = prompt.split()[-1]  # Extract last word as language
-        response_text = recommend_resources(language)
+        if language:
+            response_text = recommend_resources(language)
+        else:
+            response_text = "Which programming language would you like to learn?"
     elif intent == "quiz":
-        language = prompt.split()[-1]
-        response_text = generate_quiz(language)
+        if language:
+            response_text = generate_quiz(language)
+        else:
+            response_text = "Which programming language quiz would you like to attempt?"
     elif intent == "explain":
         response_text = explain_answer(prompt)
     else:
