@@ -1,99 +1,95 @@
 import streamlit as st
 import google.generativeai as genai
-import random
-import json
 
-# Set Google Gemini API key
-GENAI_API_KEY = "AIzaSyD9ZPsFRIDK5oaXbZriD_Ib1CjGzV0mejk"
-genai.configure(api_key=GENAI_API_KEY)
+# Configure the Gemini API
+API_KEY = "AIzaSyD9ZPsFRIDK5oaXbZriD_Ib1CjGzV0mejk"
+genai.configure(api_key=API_KEY)
+model = genai.GenerativeModel('gemini-1.5-flash')
 
-# Initialize session state
+# Supported programming languages
+SUPPORTED_LANGUAGES = ["Python", "Java", "C++", "JavaScript"]
+
+# Initialize chat history
+if "chat" not in st.session_state:
+    st.session_state.chat = model.start_chat(history=[])
+
 if "messages" not in st.session_state:
     st.session_state.messages = []
-if "quiz" not in st.session_state:
-    st.session_state.quiz = None
-if "user_answers" not in st.session_state:
-    st.session_state.user_answers = {}
+
+st.title("🤖 CodeMat - Your AI Learning Assistant")
+st.write("Welcome! Learn programming or test your knowledge with quizzes.")
+
+# Function to detect user intent
+def detect_intent(prompt):
+    greetings = ["hi", "hello", "hey"]
+    if any(greet in prompt.lower() for greet in greetings):
+        return "greeting"
+    elif "learn" in prompt.lower():
+        return "learn"
+    elif "quiz" in prompt.lower():
+        return "quiz"
+    elif "explain" in prompt.lower():
+        return "explain"
+    return "chat"
+
+# Function to extract programming language
+def extract_language(prompt):
+    for lang in SUPPORTED_LANGUAGES:
+        if lang.lower() in prompt.lower():
+            return lang
+    return None
 
 # Function to generate quiz questions
-def generate_quiz(language="Python", num_questions=10):
-    prompt = f"Generate {num_questions} multiple-choice quiz questions for {language}. Each question should have 4 options (A, B, C, D) and a correct answer."
-    
-    model = genai.GenerativeModel("gemini-pro")
+def generate_quiz(language):
+    prompt = f"Generate a basic multiple-choice quiz with 10 questions on {language}. Provide options and indicate the correct answer."
     response = model.generate_content(prompt)
+    return response.text
+
+# Function to recommend learning resources
+def recommend_resources(language):
+    prompt = f"Recommend YouTube videos, websites, and books for learning {language}."
+    response = model.generate_content(prompt)
+    return response.text
+
+# Function to explain quiz questions
+def explain_answer(question):
+    prompt = f"Explain the correct answer to this quiz question: {question}"
+    response = model.generate_content(prompt)
+    return response.text
+
+# Display chat history
+for message in st.session_state.messages:
+    with st.chat_message(message["role"]):
+        st.markdown(message["content"])
+
+# Chat input
+if prompt := st.chat_input("Say something..."):
+    intent = detect_intent(prompt)
+    language = extract_language(prompt)
     
-    try:
-        questions = json.loads(response.text)
-        return questions
-    except:
-        return None
-
-# Function to calculate score
-def calculate_score():
-    if "quiz" not in st.session_state or not st.session_state.quiz:
-        return 0, len(st.session_state.user_answers)
-    
-    correct_count = 0
-    for i, question in enumerate(st.session_state.quiz):
-        if i in st.session_state.user_answers:
-            if st.session_state.user_answers[i] == question["answer"]:
-                correct_count += 1
-    return correct_count, len(st.session_state.quiz)
-
-# UI Layout
-st.title("🤖 CodeMat - Your AI Learning Assistant")
-st.write("Welcome! Learn programming or test your knowledge.")
-
-# Display chat messages
-for msg in st.session_state.messages:
-    with st.chat_message(msg["role"]):
-        st.markdown(msg["content"])
-
-# User input
-user_input = st.chat_input("Ask me something or request a quiz (e.g., 'I want a Python quiz')")
-
-if user_input:
-    st.session_state.messages.append({"role": "user", "content": user_input})
-    
-    if "quiz" in user_input.lower():
-        lang = "Python"  # Default language
-        for l in ["Python", "Java", "C++", "JavaScript"]:
-            if l.lower() in user_input.lower():
-                lang = l
-                break
-        
-        st.session_state.quiz = generate_quiz(lang, 10)
-        st.session_state.user_answers = {}
-
-        if st.session_state.quiz:
-            response = f"🎯 Generating 10 {lang} questions...\n\n"
+    if intent == "greeting":
+        response_text = "Hello! How can I assist you today?"
+    elif intent == "learn":
+        if language:
+            response_text = recommend_resources(language)
         else:
-            response = "⚠️ Failed to parse questions. Please try again."
-
+            response_text = "Which programming language would you like to learn?"
+    elif intent == "quiz":
+        if language:
+            response_text = generate_quiz(language)
+        else:
+            response_text = "Which programming language quiz would you like to attempt?"
+    elif intent == "explain":
+        response_text = explain_answer(prompt)
     else:
-        response = f"🤖 Sorry, I can only provide programming quizzes and tutorials."
+        response_text = model.generate_content(prompt).text  # General AI response
 
-    st.session_state.messages.append({"role": "assistant", "content": response})
-    st.rerun()
+    # Add user message to chat history
+    st.session_state.messages.append({"role": "user", "content": prompt})
+    with st.chat_message("user"):
+        st.markdown(prompt)
 
-# Display quiz if available
-if st.session_state.quiz:
-    st.subheader("📝 Quiz Time! Answer the following questions:")
-    
-    for i, q in enumerate(st.session_state.quiz):
-        st.write(f"**{i+1}. {q['question']}**")
-        user_answer = st.radio(
-            f"Select your answer for Q{i+1}:",
-            options=q["options"],
-            index=None,
-            key=f"q_{i}",
-        )
-        if user_answer:
-            st.session_state.user_answers[i] = user_answer
-    
-    if st.button("Submit Quiz"):
-        score, total = calculate_score()
-        st.success(f"Your Score: {score}/{total} 🎉")
-        st.session_state.quiz = None  # Reset after submission
-        st.session_state.user_answers = {}
-
+    # Add bot response to chat history
+    st.session_state.messages.append({"role": "assistant", "content": response_text})
+    with st.chat_message("assistant"):
+        st.markdown(response_text)
