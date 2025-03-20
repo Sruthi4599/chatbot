@@ -2,7 +2,7 @@ import streamlit as st
 import google.generativeai as genai
 
 # Configure the Gemini API
-API_KEY = "YOUR_GEMINI_API_KEY"
+API_KEY = "AIzaSyD9ZPsFRIDK5oaXbZriD_Ib1CjGzV0mejk"
 genai.configure(api_key=API_KEY)
 model = genai.GenerativeModel('gemini-1.5-flash')
 
@@ -16,7 +16,7 @@ if "chat" not in st.session_state:
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-st.title("🤖 CodeMate - Your AI Learning Assistant")
+st.title("🤖 CodeMat - Your AI Learning Assistant")
 st.write("Welcome! Learn programming or test your knowledge with quizzes.")
 
 # Function to detect user intent
