@@ -1,82 +1,92 @@
 import streamlit as st
 import google.generativeai as genai
 
-API_KEY = "AIzaSyD9ZPsFRIDK5oaXbZriD_Ib1CjGzV0mejk"
-
+# Set up Google Gemini API
+API_KEY = "YOUR_GOOGLE_GEMINI_API_KEY"
 genai.configure(api_key=API_KEY)
 model = genai.GenerativeModel('gemini-1.5-flash')
-
-if "chat" not in st.session_state:
-    st.session_state.chat = model.start_chat(history=[])
 
 st.title("🤖 CodeMat - Your AI Learning Assistant")
 st.write("Welcome! Learn programming or test your knowledge with quizzes.")
 
+# Store chat history
+if "chat" not in st.session_state:
+    st.session_state.chat = model.start_chat(history=[])
 if "messages" not in st.session_state:
     st.session_state.messages = []
-
 if "quiz_data" not in st.session_state:
-    st.session_state.quiz_data = None
+    st.session_state.quiz_data = []
 if "user_answers" not in st.session_state:
     st.session_state.user_answers = {}
 
+# Display previous messages
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
 
+# User input
 if prompt := st.chat_input("Ask me something or request a quiz (e.g., 'I want a Python quiz')"):
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
         st.markdown(prompt)
 
+    # Detect quiz request
     if "quiz" in prompt.lower():
-        language = "Python"
-        if "java" in prompt.lower():
-            language = "Java"
-        elif "c++" in prompt.lower():
-            language = "C++"
-        elif "javascript" in prompt.lower():
-            language = "JavaScript"
+        language = "Python"  # Default language (can be extracted from user input)
+        st.write(f"🎯 Generating a {language} quiz...")
 
-        quiz_prompt = f"Generate 5 multiple-choice questions for {language}. Each question should have exactly 4 options (A, B, C, D) and specify the correct answer. Format: \nQ: <question>\nA) <option1>\nB) <option2>\nC) <option3>\nD) <option4>\nCorrect: <correct_option>"
-        
-        response = model.generate_content(quiz_prompt)
-        quiz_text = response.text.strip()
+        quiz_prompt = f"Generate a {language} multiple-choice quiz with 5 questions. Provide four options (A, B, C, D) and specify the correct answer."
+        response = model.generate_content(quiz_prompt).text
 
-        # Parse questions
-        questions = []
-        blocks = quiz_text.split("\n\n")
-        for block in blocks:
-            lines = block.split("\n")
+        # Parse quiz questions
+        questions = response.split("\n\n")
+        quiz_data = []
+
+        for q in questions:
+            lines = q.split("\n")
             if len(lines) >= 6:
-                q_text = lines[0][3:].strip()
-                options = [lines[i][3:].strip() for i in range(1, 5)]
-                correct = lines[5].split(":")[-1].strip()
-                questions.append({"question": q_text, "options": options, "answer": correct})
+                question_text = lines[0].strip()
+                options = [line.split(" ", 1)[1].strip() for line in lines[1:5]]
+                correct_answer = lines[5].split(":")[-1].strip()
 
-        st.session_state.quiz_data = questions
-        st.session_state.user_answers = {i: None for i in range(len(questions))}
+                quiz_data.append({
+                    "question": question_text,
+                    "options": options,
+                    "answer": correct_answer
+                })
+
+        st.session_state.quiz_data = quiz_data
+        st.session_state.user_answers = {}
 
     else:
+        # Regular chatbot response
         response = st.session_state.chat.send_message(prompt)
         st.session_state.messages.append({"role": "assistant", "content": response.text})
         with st.chat_message("assistant"):
             st.markdown(response.text)
 
+# Display Quiz UI
 if st.session_state.quiz_data:
-    st.write("### Your Quiz")
-    for idx, q in enumerate(st.session_state.quiz_data):
-        st.write(f"**{idx + 1}. {q['question']}**")
-        st.session_state.user_answers[idx] = st.radio(
-            f"Select your answer for Q{idx + 1}:", 
-            q["options"], 
-            index=None, 
-            key=f"q{idx}"
+    st.write("### 📌 Quiz Time! Answer the following questions:")
+
+    for i, q in enumerate(st.session_state.quiz_data):
+        st.write(f"**{i + 1}. {q['question']}**")
+        st.session_state.user_answers[i] = st.radio(
+            f"Select your answer for Q{i+1}:",
+            q["options"],
+            index=None,
+            key=f"q{i}"
         )
 
+    # Submit button
     if st.button("Submit Quiz"):
-        score = sum(
-            1 for i, ans in st.session_state.user_answers.items() 
-            if ans and ans.startswith(st.session_state.quiz_data[i]["answer"])
-        )
+        score = 0
+        for i, ans in st.session_state.user_answers.items():
+            correct_option = st.session_state.quiz_data[i]["answer"]
+            correct_index = ["A", "B", "C", "D"].index(correct_option)
+            correct_text = st.session_state.quiz_data[i]["options"][correct_index]
+
+            if ans == correct_text:
+                score += 1
+
         st.success(f"Your Score: {score}/{len(st.session_state.quiz_data)} 🎉")
