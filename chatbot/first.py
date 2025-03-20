@@ -15,6 +15,11 @@ st.write("Welcome! Learn programming or test your knowledge with quizzes.")
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
+if "quiz_data" not in st.session_state:
+    st.session_state.quiz_data = None
+if "user_answers" not in st.session_state:
+    st.session_state.user_answers = {}
+
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
@@ -24,9 +29,8 @@ if prompt := st.chat_input("Ask me something or request a quiz (e.g., 'I want a 
     with st.chat_message("user"):
         st.markdown(prompt)
 
-    # Detect if user is asking for a quiz
     if "quiz" in prompt.lower():
-        language = "Python"  # Default to Python if not specified
+        language = "Python"
         if "java" in prompt.lower():
             language = "Java"
         elif "c++" in prompt.lower():
@@ -34,34 +38,45 @@ if prompt := st.chat_input("Ask me something or request a quiz (e.g., 'I want a 
         elif "javascript" in prompt.lower():
             language = "JavaScript"
 
-        quiz_prompt = f"Generate 5 multiple-choice questions for {language}. Each question should have 4 options and indicate the correct answer."
+        quiz_prompt = f"Generate 5 multiple-choice questions for {language}. Each question should have exactly 4 options (A, B, C, D) and specify the correct answer. Format: \nQ: <question>\nA) <option1>\nB) <option2>\nC) <option3>\nD) <option4>\nCorrect: <correct_option>"
+        
         response = model.generate_content(quiz_prompt)
-        quiz_text = response.text
+        quiz_text = response.text.strip()
 
-        # Parse the generated quiz text into questions, options, and correct answers
+        # Parse questions
         questions = []
-        for q_block in quiz_text.split("\n\n"):
-            lines = q_block.split("\n")
-            if len(lines) >= 5:
-                question = lines[0].strip()
-                options = [lines[i].strip() for i in range(1, 5)]
-                correct_answer = lines[5].split(":")[-1].strip() if len(lines) > 5 else None
-                questions.append((question, options, correct_answer))
+        blocks = quiz_text.split("\n\n")
+        for block in blocks:
+            lines = block.split("\n")
+            if len(lines) >= 6:
+                q_text = lines[0][3:].strip()
+                options = [lines[i][3:].strip() for i in range(1, 5)]
+                correct = lines[5].split(":")[-1].strip()
+                questions.append({"question": q_text, "options": options, "answer": correct})
 
-        st.session_state.messages.append({"role": "assistant", "content": "Here is your quiz:"})
-        with st.chat_message("assistant"):
-            st.markdown("Here is your quiz:")
+        st.session_state.quiz_data = questions
+        st.session_state.user_answers = {i: None for i in range(len(questions))}
 
-            user_answers = {}
-            for idx, (question, options, correct_answer) in enumerate(questions):
-                st.write(f"**{idx + 1}. {question}**")
-                user_answers[idx] = st.radio(f"Select an answer for question {idx + 1}:", options, key=f"q{idx}")
-
-            if st.button("Submit Quiz"):
-                score = sum(1 for i, ans in user_answers.items() if ans == questions[i][2])
-                st.success(f"Your Score: {score}/{len(questions)} 🎉")
     else:
         response = st.session_state.chat.send_message(prompt)
         st.session_state.messages.append({"role": "assistant", "content": response.text})
         with st.chat_message("assistant"):
             st.markdown(response.text)
+
+if st.session_state.quiz_data:
+    st.write("### Your Quiz")
+    for idx, q in enumerate(st.session_state.quiz_data):
+        st.write(f"**{idx + 1}. {q['question']}**")
+        st.session_state.user_answers[idx] = st.radio(
+            f"Select your answer for Q{idx + 1}:", 
+            q["options"], 
+            index=None, 
+            key=f"q{idx}"
+        )
+
+    if st.button("Submit Quiz"):
+        score = sum(
+            1 for i, ans in st.session_state.user_answers.items() 
+            if ans and ans.startswith(st.session_state.quiz_data[i]["answer"])
+        )
+        st.success(f"Your Score: {score}/{len(st.session_state.quiz_data)} 🎉")
