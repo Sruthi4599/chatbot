@@ -1,8 +1,9 @@
 import streamlit as st
 import google.generativeai as genai
+import json
 
 # Set up Google Gemini API
-API_KEY = "AIzaSyD9ZPsFRIDK5oaXbZriD_Ib1CjGzV0mejk"
+API_KEY = "YOUR_GOOGLE_GEMINI_API_KEY"
 genai.configure(api_key=API_KEY)
 model = genai.GenerativeModel('gemini-1.5-flash')
 
@@ -35,28 +36,22 @@ if prompt := st.chat_input("Ask me something or request a quiz (e.g., 'I want a 
         language = "Python"  # Default language (can be extracted from user input)
         st.write(f"🎯 Generating a {language} quiz...")
 
-        quiz_prompt = f"Generate a {language} multiple-choice quiz with 5 questions. Provide four options (A, B, C, D) and specify the correct answer."
+        quiz_prompt = (
+            f"Generate a {language} multiple-choice quiz with 5 questions. "
+            "Provide JSON format output with keys: 'question', 'options' (list), and 'answer' (letter)."
+        )
+
         response = model.generate_content(quiz_prompt).text
 
-        # Parse quiz questions
-        questions = response.split("\n\n")
-        quiz_data = []
+        # **Fix: Parse JSON correctly**
+        try:
+            quiz_data = json.loads(response)  # Convert response to Python dictionary
+            if isinstance(quiz_data, list):
+                st.session_state.quiz_data = quiz_data
+                st.session_state.user_answers = {}
 
-        for q in questions:
-            lines = q.split("\n")
-            if len(lines) >= 6:
-                question_text = lines[0].strip()
-                options = [line.split(" ", 1)[1].strip() for line in lines[1:5]]
-                correct_answer = lines[5].split(":")[-1].strip()
-
-                quiz_data.append({
-                    "question": question_text,
-                    "options": options,
-                    "answer": correct_answer
-                })
-
-        st.session_state.quiz_data = quiz_data
-        st.session_state.user_answers = {}
+        except json.JSONDecodeError:
+            st.error("⚠️ Failed to parse quiz questions. Please try again.")
 
     else:
         # Regular chatbot response
