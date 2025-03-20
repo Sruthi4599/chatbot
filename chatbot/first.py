@@ -20,7 +20,7 @@ if "messages" not in st.session_state:
 if "quiz_questions" not in st.session_state:
     st.session_state.quiz_questions = {}  # Stores structured quiz questions per language
 
-st.title("🤖 CodeGenie - Your AI Learning Assistant")
+st.title("🤖 CodeMat - Your AI Learning Assistant")
 st.write("Welcome! Learn programming or test your knowledge with quizzes.")
 
 # Function to detect user intent
