@@ -4,7 +4,7 @@ import random
 import json
 
 # Set Google Gemini API key
-GENAI_API_KEY = "YOUR_GOOGLE_GEMINI_API_KEY"
+GENAI_API_KEY = "AIzaSyD9ZPsFRIDK5oaXbZriD_Ib1CjGzV0mejk"
 genai.configure(api_key=GENAI_API_KEY)
 
 # Initialize session state
