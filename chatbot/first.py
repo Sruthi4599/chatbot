@@ -1,49 +1,19 @@
 import streamlit as st
 import google.generativeai as genai
 
-# Configure the Gemini API
-API_KEY = "AIzaSyD9ZPsFRIDK5oaXbZriD_Ib1CjGzV0mejk"
-genai.configure(api_key=API_KEY)
-model = genai.GenerativeModel('gemini-1.5-flash')
+# Configure the Google Gemini API
+GOOGLE_API_KEY = "YOUR_API_KEY_HERE"
+genai.configure(api_key=GOOGLE_API_KEY)
+model = genai.GenerativeModel("gemini-pro")
 
-# Supported programming languages
-SUPPORTED_LANGUAGES = ["Python", "Java", "C++", "JavaScript"]
-
-# Initialize chat history and quiz state
-if "chat" not in st.session_state:
-    st.session_state.chat = model.start_chat(history=[])
-if "messages" not in st.session_state:
-    st.session_state.messages = []
+# Initialize session state
 if "quiz" not in st.session_state:
-    st.session_state.quiz = None  # Stores quiz questions and answers
+    st.session_state.quiz = None
 
-st.title("🤖 CodeMat - Your AI Learning Assistant")
-st.write("Welcome! Learn programming or test your knowledge with quizzes.")
-
-# Function to detect user intent
-def detect_intent(prompt):
-    greetings = ["hi", "hello", "hey"]
-    if any(greet in prompt.lower() for greet in greetings):
-        return "greeting"
-    elif "learn" in prompt.lower():
-        return "learn"
-    elif "quiz" in prompt.lower():
-        return "quiz"
-    elif "explain" in prompt.lower():
-        return "explain"
-    return "chat"
-
-# Function to extract programming language
-def extract_language(prompt):
-    for lang in SUPPORTED_LANGUAGES:
-        if lang.lower() in prompt.lower():
-            return lang
-    return None
-
-# Function to generate quiz questions with options, correct answers, and explanations
+# Function to generate a quiz
 def generate_quiz(language):
     prompt = f"""
-    Generate a 10-question multiple-choice quiz on {language}. 
+    Generate a 10-question multiple-choice quiz on {language}.
     Each question should have four options (a, b, c, d), the correct answer, and an explanation.
     Format:
     Question: <question text>
@@ -54,14 +24,18 @@ def generate_quiz(language):
     Answer: <correct option letter>
     Explanation: <brief explanation>
     """
-    response = model.generate_content(prompt)
-    quiz_data = response.text.split("\n\n")  # Splitting into individual questions
 
-    st.session_state.quiz = {
-        "questions": [],
-        "current_index": 0,
-        "score": 0
-    }  # Reset quiz state
+    response = model.generate_content(prompt)
+    quiz_text = response.text.strip()
+
+    # Debugging: Print the response to check format
+    print("Quiz Response:", quiz_text)
+
+    # Ensure response is split correctly into questions
+    quiz_data = quiz_text.split("\n\n")
+
+    # Reset quiz state
+    st.session_state.quiz = {"questions": [], "current_index": 0, "score": 0}
 
     for q in quiz_data:
         lines = q.strip().split("\n")
@@ -79,30 +53,25 @@ def generate_quiz(language):
                 "question": question, "options": options, "correct": correct, "explanation": explanation
             })
 
-    return "Quiz generated! Enter your answers (a/b/c/d) below."
+    if not st.session_state.quiz["questions"]:
+        return "⚠️ Failed to generate quiz. Please try again!"
 
-# Function to recommend learning resources
-def recommend_resources(language):
-    prompt = f"Recommend YouTube videos, websites, and books for learning {language}."
-    response = model.generate_content(prompt)
-    return response.text
+    return "✅ Quiz generated! Enter your answers (a/b/c/d) below."
 
-# Function to explain quiz questions
-def explain_answer(question):
-    prompt = f"Explain the correct answer to this quiz question: {question}"
-    response = model.generate_content(prompt)
-    return response.text
-
-# Function to display and handle quiz interaction
+# Function to display the quiz
 def display_quiz():
     if "quiz" in st.session_state and st.session_state.quiz:
+        if not st.session_state.quiz["questions"]:
+            st.error("⚠️ No questions generated! Try requesting the quiz again.")
+            return
+
         idx = st.session_state.quiz["current_index"]
         total_questions = len(st.session_state.quiz["questions"])
 
         if idx < total_questions:
             q_data = st.session_state.quiz["questions"][idx]
-            st.write(f"**{idx + 1}. {q_data['question']}**")  # Display question number
-            
+            st.write(f"**{idx + 1}. {q_data['question']}**")  
+
             # Display options
             for key, value in q_data["options"].items():
                 st.write(f"**{key})** {value}")
@@ -120,48 +89,38 @@ def display_quiz():
 
                 # Move to next question
                 st.session_state.quiz["current_index"] += 1
-                st.experimental_rerun()  # Refresh the page to show the next question
+                st.experimental_rerun()
 
         else:
             st.write(f"🎉 Quiz completed! Your final score: **{st.session_state.quiz['score']}/{total_questions}**")
-            del st.session_state.quiz  # Reset quiz after completion
+            del st.session_state.quiz
 
-# Display chat history
-for message in st.session_state.messages:
-    with st.chat_message(message["role"]):
-        st.markdown(message["content"])
+# Streamlit UI
+st.markdown("<h1 style='text-align: center;'>🤖 CodeMat - Your AI Learning Assistant</h1>", unsafe_allow_html=True)
+st.write("Welcome! Learn programming or test your knowledge with quizzes.")
 
-# Chat input
-if prompt := st.chat_input("Say something..."):
-    intent = detect_intent(prompt)
-    language = extract_language(prompt)
-    
-    if intent == "greeting":
-        response_text = "Hello! How can I assist you today?"
-    elif intent == "learn":
+user_input = st.text_input("Ask me something or request a quiz (e.g., 'I want a Python quiz'): ")
+
+if user_input:
+    if "quiz" in user_input.lower():
+        # Extract language from input
+        words = user_input.lower().split()
+        language = None
+        for lang in ["python", "java", "c++", "javascript"]:
+            if lang in words:
+                language = lang
+                break
+        
         if language:
-            response_text = recommend_resources(language)
+            st.session_state.quiz = None  # Reset quiz state
+            st.write(f"📚 Generating a **{language}** quiz...")
+            quiz_msg = generate_quiz(language)
+            st.success(quiz_msg)
+            st.experimental_rerun()
         else:
-            response_text = "Which programming language would you like to learn?"
-    elif intent == "quiz":
-        if language:
-            response_text = generate_quiz(language)
-        else:
-            response_text = "Which programming language quiz would you like to attempt?"
-    elif intent == "explain":
-        response_text = explain_answer(prompt)
+            st.error("⚠️ Please specify a programming language (Python, Java, C++, JavaScript).")
     else:
-        response_text = model.generate_content(prompt).text  # General AI response
+        st.write("🤖 I'm here to help! Ask me anything or request a quiz.")
 
-    # Add user message to chat history
-    st.session_state.messages.append({"role": "user", "content": prompt})
-    with st.chat_message("user"):
-        st.markdown(prompt)
-
-    # Add bot response to chat history
-    st.session_state.messages.append({"role": "assistant", "content": response_text})
-    with st.chat_message("assistant"):
-        st.markdown(response_text)
-
-# Call quiz display function
+# Display quiz if available
 display_quiz()
