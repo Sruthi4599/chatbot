@@ -1,146 +1,100 @@
+import openai
 import streamlit as st
-import google.generativeai as genai
+import random
 
-# Configure the Gemini API
-API_KEY = "AIzaSyD9ZPsFRIDK5oaXbZriD_Ib1CjGzV0mejk"
-genai.configure(api_key=API_KEY)
-model = genai.GenerativeModel('gemini-1.5-flash')
+# Set OpenAI API Key
+openai.api_key = "YOUR_OPENAI_API_KEY"  # Replace with your actual API key
 
-# Supported programming languages
-SUPPORTED_LANGUAGES = ["Python", "Java", "C++", "JavaScript"]
-
-# Initialize session state
-if "chat" not in st.session_state:
-    st.session_state.chat = model.start_chat(history=[])
-
+# Initialize session state variables
 if "messages" not in st.session_state:
     st.session_state.messages = []
-
-if "quiz_questions" not in st.session_state:
-    st.session_state.quiz_questions = []
-
-if "current_question_index" not in st.session_state:
-    st.session_state.current_question_index = 0
-
 if "quiz_active" not in st.session_state:
     st.session_state.quiz_active = False
+if "current_question_index" not in st.session_state:
+    st.session_state.current_question_index = 0
+if "quiz_questions" not in st.session_state:
+    st.session_state.quiz_questions = []
+if "quiz_answers" not in st.session_state:
+    st.session_state.quiz_answers = []
+if "quiz_score" not in st.session_state:
+    st.session_state.quiz_score = 0
 
-if "quiz_language" not in st.session_state:
-    st.session_state.quiz_language = None
+# Function to generate quiz questions using OpenAI API
+def generate_quiz_questions(language):
+    prompt = f"Generate a multiple-choice quiz with 10 questions on {language}. Each question should have 4 options and one correct answer."
+    response = openai.ChatCompletion.create(
+        model="gpt-4",
+        messages=[{"role": "system", "content": prompt}]
+    )
+    
+    questions = []
+    if response and "choices" in response:
+        quiz_text = response["choices"][0]["message"]["content"]
+        quiz_lines = quiz_text.split("\n")
+        
+        for i in range(0, len(quiz_lines), 6):
+            if i + 5 < len(quiz_lines):
+                question = quiz_lines[i].strip()
+                options = [quiz_lines[i + j].strip() for j in range(1, 5)]
+                answer = quiz_lines[i + 5].strip().split(":")[-1].strip()
+                questions.append({"question": question, "options": options, "answer": answer})
 
+    return questions[:10]  # Return only 10 questions
+
+# Function to process user input
+def process_input(user_input):
+    if "quiz" in user_input.lower():
+        detected_language = None
+        for lang in ["Python", "Java", "C++", "JavaScript"]:
+            if lang.lower() in user_input.lower():
+                detected_language = lang
+                break
+        
+        if detected_language:
+            st.session_state.quiz_active = True
+            st.session_state.quiz_questions = generate_quiz_questions(detected_language)
+            st.session_state.quiz_answers = [q["answer"] for q in st.session_state.quiz_questions]
+            st.session_state.current_question_index = 0
+            st.session_state.quiz_score = 0
+            return f"Starting the {detected_language} quiz! Here’s your first question:"
+        else:
+            return "Please specify which programming language quiz you want to attempt (Python, Java, C++, JavaScript)."
+    
+    if st.session_state.quiz_active:
+        current_index = st.session_state.current_question_index
+        if current_index < len(st.session_state.quiz_questions):
+            correct_answer = st.session_state.quiz_answers[current_index]
+            if user_input.strip().lower() == correct_answer.lower():
+                st.session_state.quiz_score += 1
+                response = "✅ Correct!"
+            else:
+                response = f"❌ Wrong answer! The correct answer was {correct_answer}."
+            
+            st.session_state.current_question_index += 1
+            if st.session_state.current_question_index >= len(st.session_state.quiz_questions):
+                final_score = st.session_state.quiz_score
+                st.session_state.quiz_active = False
+                return f"🎉 Quiz completed! Your final score: {final_score}/{len(st.session_state.quiz_questions)}"
+            else:
+                next_question = st.session_state.quiz_questions[st.session_state.current_question_index]["question"]
+                return f"{response}\n\nNext Question: {next_question}"
+    
+    return "I didn't understand that. Please ask about a quiz or programming topic."
+
+# Streamlit UI
 st.title("🤖 CodeMat - Your AI Learning Assistant")
 st.write("Welcome! Learn programming or test your knowledge with quizzes.")
 
-# Function to detect user intent
-def detect_intent(prompt):
-    greetings = ["hi", "hello", "hey"]
-    if any(greet in prompt.lower() for greet in greetings):
-        return "greeting"
-    elif "learn" in prompt.lower():
-        return "learn"
-    elif "quiz" in prompt.lower():
-        return "quiz"
-    elif "explain" in prompt.lower():
-        return "explain"
-    return "chat"
-
-# Function to extract programming language
-def extract_language(prompt):
-    for lang in SUPPORTED_LANGUAGES:
-        if lang.lower() in prompt.lower():
-            return lang
-    return None
-
-# Function to generate quiz questions
-def generate_quiz(language):
-    prompt = f"Generate a multiple-choice quiz with 5 questions on {language}. Provide options and indicate the correct answer."
-    response = model.generate_content(prompt).text
-
-    questions = []
-    raw_questions = response.split("\n\n")  # Splitting questions based on spacing
-
-    for q in raw_questions:
-        if "Correct Answer:" in q:
-            parts = q.split("Correct Answer:")
-            question_text = parts[0].strip()
-            correct_answer = parts[1].strip()
-            questions.append({"question": question_text, "correct": correct_answer})
-
-    return questions
-
-# Function to recommend learning resources
-def recommend_resources(language):
-    prompt = f"Recommend YouTube videos, websites, and books for learning {language}."
-    response = model.generate_content(prompt)
-    return response.text
-
-# Function to explain quiz questions
-def explain_answer(question):
-    prompt = f"Explain the correct answer to this quiz question: {question}"
-    response = model.generate_content(prompt)
-    return response.text
-
-# Display chat history
+# Chat history display
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
 
-# If a quiz is active, show the next question
-if st.session_state.quiz_active and st.session_state.quiz_questions:
-    question_data = st.session_state.quiz_questions[st.session_state.current_question_index]
-    st.write(f"**{question_data['question']}**")
-    
-    user_answer = st.text_input("Enter your answer (a/b/c/d):", key="user_quiz_answer")
-    
-    if user_answer:
-        if user_answer.strip().lower() == question_data["correct"].strip().lower():
-            st.success("🎉 Correct!")
-            st.session_state.current_question_index += 1  # Move to the next question
-        else:
-            st.error("❌ Wrong answer!")
-            explanation = explain_answer(question_data['question'])
-            st.write(f"**Explanation:** {explanation}")
+# User input
+prompt = st.chat_input("Ask me anything about programming or say 'I want to attempt a Python quiz'!")
 
-        # Check if more questions remain
-        if st.session_state.current_question_index < len(st.session_state.quiz_questions):
-            st.experimental_rerun()  # Refresh UI for next question
-        else:
-            st.session_state.quiz_active = False
-            st.session_state.current_question_index = 0
-            st.write("✅ Quiz completed! Type 'quiz' to attempt another.")
-
-# Chat input
-if prompt := st.chat_input("Say something..."):
-    intent = detect_intent(prompt)
-    language = extract_language(prompt)
-
-    if intent == "greeting":
-        response_text = "Hello! How can I assist you today?"
-    elif intent == "learn":
-        if language:
-            response_text = recommend_resources(language)
-        else:
-            response_text = "Which programming language would you like to learn?"
-    elif intent == "quiz":
-        if language:
-            st.session_state.quiz_questions = generate_quiz(language)
-            st.session_state.quiz_active = True
-            st.session_state.quiz_language = language
-            st.session_state.current_question_index = 0
-            st.experimental_rerun()
-        else:
-            response_text = "Which programming language quiz would you like to attempt?"
-    elif intent == "explain":
-        response_text = explain_answer(prompt)
-    else:
-        response_text = model.generate_content(prompt).text  # General AI response
-
-    # Add user message to chat history
+if prompt:
+    response = process_input(prompt)
     st.session_state.messages.append({"role": "user", "content": prompt})
-    with st.chat_message("user"):
-        st.markdown(prompt)
-
-    # Add bot response to chat history
-    st.session_state.messages.append({"role": "assistant", "content": response_text})
-    with st.chat_message("assistant"):
-        st.markdown(response_text)
+    st.session_state.messages.append({"role": "assistant", "content": response})
+    st.rerun()
