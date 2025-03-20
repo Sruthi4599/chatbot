@@ -1,5 +1,6 @@
 import streamlit as st
 import google.generativeai as genai
+import re  # For extracting question numbers
 
 # Configure the Gemini API
 API_KEY = "AIzaSyD9ZPsFRIDK5oaXbZriD_Ib1CjGzV0mejk"
@@ -9,7 +10,7 @@ model = genai.GenerativeModel('gemini-1.5-flash')
 # Supported programming languages
 SUPPORTED_LANGUAGES = ["Python", "Java", "C++", "JavaScript"]
 
-# Initialize chat history and quiz storage
+# Initialize session state for chat history and quiz storage
 if "chat" not in st.session_state:
     st.session_state.chat = model.start_chat(history=[])
 
@@ -17,7 +18,7 @@ if "messages" not in st.session_state:
     st.session_state.messages = []
 
 if "quiz_questions" not in st.session_state:
-    st.session_state.quiz_questions = {}  # Store questions per language
+    st.session_state.quiz_questions = {}  # Stores structured quiz questions per language
 
 st.title("🤖 CodeMat - Your AI Learning Assistant")
 st.write("Welcome! Learn programming or test your knowledge with quizzes.")
@@ -46,10 +47,15 @@ def extract_language(prompt):
 def generate_quiz(language):
     prompt = f"Generate a multiple-choice quiz with 10 questions on {language}. Provide options and indicate the correct answer."
     response = model.generate_content(prompt)
-    
-    # Store questions in session state
-    st.session_state.quiz_questions[language] = response.text
-    return response.text
+
+    # Split the response into individual questions
+    questions = response.text.strip().split("\n\n")  # Assuming questions are separated by double newlines
+    structured_questions = {i+1: q for i, q in enumerate(questions)}  # Numbering questions
+
+    # Store structured questions in session state
+    st.session_state.quiz_questions[language] = structured_questions
+
+    return "\n\n".join(questions)  # Return formatted quiz text
 
 # Function to recommend learning resources
 def recommend_resources(language):
@@ -57,9 +63,14 @@ def recommend_resources(language):
     response = model.generate_content(prompt)
     return response.text
 
+# Function to extract question number from user input
+def extract_question_number(prompt):
+    match = re.search(r'\bquestion (\d+)\b', prompt, re.IGNORECASE)
+    return int(match.group(1)) if match else None
+
 # Function to explain a quiz question
-def explain_answer(question):
-    prompt = f"Explain the correct answer to this quiz question: {question}"
+def explain_answer(question_text):
+    prompt = f"Explain the correct answer to this quiz question: {question_text}"
     response = model.generate_content(prompt)
     return response.text
 
@@ -89,18 +100,31 @@ if prompt := st.chat_input("Say something..."):
             response_text = "Which programming language quiz would you like to attempt?"
     
     elif intent == "explain":
-        # Check if a question from the quiz is mentioned
+        question_number = extract_question_number(prompt)
         matched_question = None
-        for lang, questions in st.session_state.quiz_questions.items():
-            if prompt in questions:  # Checking if the user request matches any question
-                matched_question = prompt
-                break
+
+        # If the user provided a question number, find it
+        if question_number:
+            for lang, questions in st.session_state.quiz_questions.items():
+                if question_number in questions:
+                    matched_question = questions[question_number]
+                    break
+
+        # If no number was found, check for direct question matches
+        if not matched_question:
+            for lang, questions in st.session_state.quiz_questions.items():
+                for q_text in questions.values():
+                    if prompt.lower() in q_text.lower():
+                        matched_question = q_text
+                        break
+                if matched_question:
+                    break
 
         if matched_question:
             response_text = explain_answer(matched_question)
         else:
-            response_text = "Please specify the exact quiz question you need an explanation for."
-    
+            response_text = "Please specify the exact quiz question number or copy-paste the question you need an explanation for."
+
     else:
         response_text = model.generate_content(prompt).text  # General AI response
 
