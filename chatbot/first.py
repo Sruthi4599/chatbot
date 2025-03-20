@@ -4,7 +4,7 @@ import json
 import re  # Import regex for cleaning JSON responses
 
 # Set up Google Gemini API
-API_KEY = "YOUR_GOOGLE_GEMINI_API_KEY"  # Replace with your Gemini API key
+API_KEY = "AIzaSyD9ZPsFRIDK5oaXbZriD_Ib1CjGzV0mejk"  # Replace with your Gemini API key
 genai.configure(api_key=API_KEY)
 model = genai.GenerativeModel('gemini-1.5-flash')
 
