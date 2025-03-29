@@ -8,7 +8,7 @@ genai.configure(api_key=API_KEY)
 model = genai.GenerativeModel('gemini-1.5-flash')
 
 # Supported programming languages
-SUPPORTED_LANGUAGES = ["Python", "Java", "C++", "JavaScript"]
+SUPPORTED_LANGUAGES = ["Python", "Java", "C++", "JavaScript", "C"]
 
 # Initialize session state for chat history and quiz storage
 if "chat" not in st.session_state:
@@ -64,7 +64,7 @@ def generate_quiz(language):
 
 # Function to recommend learning resources
 def recommend_resources(language):
-    prompt = f"Recommend YouTube videos, websites, and books for learning {language}."
+    prompt = f"Recommend YouTube videos, websites, and books for learning {language}. Provide direct links to access them."
     response = model.generate_content(prompt)
     return response.text
 
