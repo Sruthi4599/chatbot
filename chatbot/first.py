@@ -47,14 +47,14 @@ def extract_language(prompt):
 def generate_quiz(language):
     prompt = f"Generate a multiple-choice quiz with 10 questions on {language}. Provide options and indicate the correct answer."
     response = model.generate_content(prompt)
-
+    
     # Split the response into individual questions
     questions = response.text.strip().split("\n\n")  # Assuming questions are separated by double newlines
     structured_questions = {i+1: q for i, q in enumerate(questions)}  # Numbering questions
-
+    
     # Store structured questions in session state
     st.session_state.quiz_questions[language] = structured_questions
-
+    
     return "\n\n".join(questions)  # Return formatted quiz text
 
 # Function to recommend learning resources
@@ -113,7 +113,7 @@ if prompt := st.chat_input("Say something..."):
         # If no number was found, check for direct question matches
         if not matched_question:
             for lang, questions in st.session_state.quiz_questions.items():
-                for q_text in questions.values():
+                for q_num, q_text in questions.items():
                     if prompt.lower() in q_text.lower():
                         matched_question = q_text
                         break
