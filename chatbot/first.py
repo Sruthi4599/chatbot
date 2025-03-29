@@ -1,8 +1,6 @@
 import streamlit as st
 import google.generativeai as genai
 import re  # For extracting question numbers
-import speech_recognition as sr  # For voice input
-import subprocess  # For code execution
 
 # Configure the Gemini API
 API_KEY = "AIzaSyD9ZPsFRIDK5oaXbZriD_Ib1CjGzV0mejk"
@@ -12,7 +10,7 @@ model = genai.GenerativeModel('gemini-1.5-flash')
 # Supported programming languages
 SUPPORTED_LANGUAGES = ["Python", "Java", "C++", "JavaScript", "C"]
 
-# Initialize session state for chat history, quiz storage, and learning paths
+# Initialize session state for chat history and quiz storage
 if "chat" not in st.session_state:
     st.session_state.chat = model.start_chat(history=[])
 
@@ -20,10 +18,7 @@ if "messages" not in st.session_state:
     st.session_state.messages = []
 
 if "quiz_questions" not in st.session_state:
-    st.session_state.quiz_questions = {}
-
-if "learning_progress" not in st.session_state:
-    st.session_state.learning_progress = {}  # Track user progress per language
+    st.session_state.quiz_questions = {}  # Stores structured quiz questions per language
 
 st.title("🤖 CodeGenie - Your AI Learning Assistant")
 st.write("Welcome! Learn programming or test your knowledge with quizzes.")
@@ -39,10 +34,6 @@ def detect_intent(prompt):
         return "quiz"
     elif "explain" in prompt.lower():
         return "explain"
-    elif "run code" in prompt.lower():
-        return "code_execution"
-    elif "voice" in prompt.lower():
-        return "voice_input"
     return "chat"
 
 # Function to extract programming language
@@ -52,20 +43,13 @@ def extract_language(prompt):
             return lang
     return None
 
-# Function to track user progress
-def track_progress(language, topic):
-    if language not in st.session_state.learning_progress:
-        st.session_state.learning_progress[language] = []
-    if topic not in st.session_state.learning_progress[language]:
-        st.session_state.learning_progress[language].append(topic)
-    return f"Progress updated: You've covered {topic} in {language}."
-
 # Function to generate quiz questions
 def generate_quiz(language):
     prompt = f"Generate a multiple-choice quiz with 10 questions on {language}. Provide options and indicate the correct answer."
     response = model.generate_content(prompt)
     
-    questions = response.text.strip().split("\n\n")
+    # Split the response into individual questions
+    questions = response.text.strip().split("\n\n")  # Assuming questions are separated by double newlines
     structured_questions = {}
     
     for i, q in enumerate(questions, start=1):
@@ -73,9 +57,10 @@ def generate_quiz(language):
         correct_answer = match.group(1) if match else "Unknown"
         structured_questions[i] = {"question": q, "answer": correct_answer}
     
+    # Store structured questions in session state
     st.session_state.quiz_questions[language] = structured_questions
     
-    return "\n\n".join(q["question"] for q in structured_questions.values())
+    return "\n\n".join(q["question"] for q in structured_questions.values())  # Return formatted quiz text
 
 # Function to recommend learning resources
 def recommend_resources(language):
@@ -93,30 +78,6 @@ def explain_answer(question_text, correct_answer):
     prompt = f"Explain why the correct answer to this quiz question is {correct_answer}: {question_text}"
     response = model.generate_content(prompt)
     return response.text
-
-# Function to execute code
-def execute_code(code, language):
-    if language == "Python":
-        try:
-            result = subprocess.run(["python3", "-c", code], capture_output=True, text=True)
-            return result.stdout or result.stderr
-        except Exception as e:
-            return str(e)
-    return "Code execution is currently supported only for Python."
-
-# Function for voice input
-def get_voice_input():
-    recognizer = sr.Recognizer()
-    with sr.Microphone() as source:
-        st.write("Listening...")
-        try:
-            audio = recognizer.listen(source)
-            text = recognizer.recognize_google(audio)
-            return text
-        except sr.UnknownValueError:
-            return "Could not understand the audio."
-        except sr.RequestError:
-            return "Error with the speech recognition service."
 
 # Display chat history
 for message in st.session_state.messages:
@@ -148,6 +109,7 @@ if prompt := st.chat_input("Say something..."):
         matched_question = None
         correct_answer = ""
 
+        # If the user provided a question number, find it
         if question_number:
             for lang, questions in st.session_state.quiz_questions.items():
                 if question_number in questions:
@@ -155,24 +117,31 @@ if prompt := st.chat_input("Say something..."):
                     correct_answer = questions[question_number]["answer"]
                     break
 
+        # If no number was found, check for direct question matches
+        if not matched_question:
+            for lang, questions in st.session_state.quiz_questions.items():
+                for q_num, q_data in questions.items():
+                    if prompt.lower() in q_data["question"].lower():
+                        matched_question = q_data["question"]
+                        correct_answer = q_data["answer"]
+                        break
+                if matched_question:
+                    break
+
         if matched_question:
             response_text = explain_answer(matched_question, correct_answer)
         else:
             response_text = "Please specify the exact quiz question number or copy-paste the question you need an explanation for."
-    
-    elif intent == "code_execution":
-        response_text = execute_code(prompt.replace("run code", ""), language)
-    
-    elif intent == "voice_input":
-        response_text = get_voice_input()
-    
-    else:
-        response_text = model.generate_content(prompt).text
 
+    else:
+        response_text = model.generate_content(prompt).text  # General AI response
+
+    # Add user message to chat history
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
         st.markdown(prompt)
 
+    # Add bot response to chat history
     st.session_state.messages.append({"role": "assistant", "content": response_text})
     with st.chat_message("assistant"):
         st.markdown(response_text)
