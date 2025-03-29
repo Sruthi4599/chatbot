@@ -50,12 +50,17 @@ def generate_quiz(language):
     
     # Split the response into individual questions
     questions = response.text.strip().split("\n\n")  # Assuming questions are separated by double newlines
-    structured_questions = {i+1: q for i, q in enumerate(questions)}  # Numbering questions
+    structured_questions = {}
+    
+    for i, q in enumerate(questions, start=1):
+        match = re.search(r'Correct Answer:\s*(.*)', q)
+        correct_answer = match.group(1) if match else "Unknown"
+        structured_questions[i] = {"question": q, "answer": correct_answer}
     
     # Store structured questions in session state
     st.session_state.quiz_questions[language] = structured_questions
     
-    return "\n\n".join(questions)  # Return formatted quiz text
+    return "\n\n".join(q["question"] for q in structured_questions.values())  # Return formatted quiz text
 
 # Function to recommend learning resources
 def recommend_resources(language):
@@ -69,8 +74,8 @@ def extract_question_number(prompt):
     return int(match.group(1)) if match else None
 
 # Function to explain a quiz question
-def explain_answer(question_text):
-    prompt = f"Explain the correct answer to this quiz question: {question_text}"
+def explain_answer(question_text, correct_answer):
+    prompt = f"Explain why the correct answer to this quiz question is {correct_answer}: {question_text}"
     response = model.generate_content(prompt)
     return response.text
 
@@ -102,26 +107,29 @@ if prompt := st.chat_input("Say something..."):
     elif intent == "explain":
         question_number = extract_question_number(prompt)
         matched_question = None
+        correct_answer = ""
 
         # If the user provided a question number, find it
         if question_number:
             for lang, questions in st.session_state.quiz_questions.items():
                 if question_number in questions:
-                    matched_question = questions[question_number]
+                    matched_question = questions[question_number]["question"]
+                    correct_answer = questions[question_number]["answer"]
                     break
 
         # If no number was found, check for direct question matches
         if not matched_question:
             for lang, questions in st.session_state.quiz_questions.items():
-                for q_num, q_text in questions.items():
-                    if prompt.lower() in q_text.lower():
-                        matched_question = q_text
+                for q_num, q_data in questions.items():
+                    if prompt.lower() in q_data["question"].lower():
+                        matched_question = q_data["question"]
+                        correct_answer = q_data["answer"]
                         break
                 if matched_question:
                     break
 
         if matched_question:
-            response_text = explain_answer(matched_question)
+            response_text = explain_answer(matched_question, correct_answer)
         else:
             response_text = "Please specify the exact quiz question number or copy-paste the question you need an explanation for."
 
