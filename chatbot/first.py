@@ -9,7 +9,7 @@ model = genai.GenerativeModel('gemini-1.5-flash')
 
 SUPPORTED_LANGUAGES = ["Python", "Java", "C++", "JavaScript", "C"]
 
-# Session State
+# Session State Initialization
 if "chat" not in st.session_state:
     st.session_state.chat = model.start_chat(history=[])
 
@@ -22,10 +22,13 @@ if "quiz_questions" not in st.session_state:
 if "user_answers" not in st.session_state:
     st.session_state.user_answers = {}
 
+if "active_quiz_lang" not in st.session_state:
+    st.session_state.active_quiz_lang = None
+
 st.title("🤖 CodeGenie - Your AI Learning Assistant")
 st.write("Welcome! Learn programming or test your knowledge with quizzes.")
 
-# Intent Detection
+# Detect Intent
 def detect_intent(prompt):
     greetings = ["hi", "hello", "hey"]
     if any(greet in prompt.lower() for greet in greetings):
@@ -44,7 +47,7 @@ def extract_language(prompt):
             return lang
     return None
 
-# Quiz Generation
+# Generate Quiz
 def generate_quiz(language):
     prompt = (
         f"Create a 10-question multiple-choice quiz on {language}. "
@@ -63,8 +66,9 @@ def generate_quiz(language):
         structured_questions[i] = {"question": question_text, "answer": correct_answer}
 
     st.session_state.quiz_questions[language] = structured_questions
+    st.session_state.active_quiz_lang = language
 
-# Quiz UI
+# Quiz UI with Buttons
 def quiz_ui(language):
     questions = st.session_state.quiz_questions.get(language, {})
     if not questions:
@@ -89,13 +93,13 @@ def quiz_ui(language):
                     st.error(f"❌ Incorrect. Correct answer is {correct}")
                 st.session_state.user_answers[q_num] = selected
 
-# Resource Recommendation
+# Recommend Resources
 def recommend_resources(language):
     prompt = f"Recommend YouTube videos, websites, and books for learning {language}. Provide direct links."
     response = model.generate_content(prompt)
     return response.text
 
-# Explain Quiz Answer
+# Explain a Quiz Question
 def extract_question_number(prompt):
     match = re.search(r'\bquestion (\d+)\b', prompt, re.IGNORECASE)
     return int(match.group(1)) if match else None
@@ -105,12 +109,12 @@ def explain_answer(question_text, correct_answer):
     response = model.generate_content(prompt)
     return response.text
 
-# Display Previous Chat
+# Display Previous Chat Messages
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
 
-# Main Input
+# Chat Input
 if prompt := st.chat_input("Say something..."):
     intent = detect_intent(prompt)
     language = extract_language(prompt)
@@ -148,7 +152,7 @@ if prompt := st.chat_input("Say something..."):
     else:
         response_text = model.generate_content(prompt).text
 
-    # Save user & bot messages
+    # Store user and bot messages
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
         st.markdown(prompt)
@@ -157,6 +161,6 @@ if prompt := st.chat_input("Say something..."):
     with st.chat_message("assistant"):
         st.markdown(response_text)
 
-    # Show quiz if quiz was triggered
-    if intent == "quiz" and language:
-        quiz_ui(language)
+# Show quiz interface after response (ensures it doesn't disappear)
+if st.session_state.active_quiz_lang:
+    quiz_ui(st.session_state.active_quiz_lang)
