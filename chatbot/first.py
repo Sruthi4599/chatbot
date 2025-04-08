@@ -1,6 +1,6 @@
 import streamlit as st
 import google.generativeai as genai
-import re  # For extracting question numbers and answers
+import re  # For extracting question numbers
 
 # Configure the Gemini API
 API_KEY = "AIzaSyD9ZPsFRIDK5oaXbZriD_Ib1CjGzV0mejk"
@@ -34,8 +34,6 @@ def detect_intent(prompt):
         return "quiz"
     elif "explain" in prompt.lower():
         return "explain"
-    elif re.search(r'question\s*\d+\s*answer\s*[:\-]?\s*[a-dA-D]', prompt.lower()):
-        return "answer"
     return "chat"
 
 # Function to extract programming language
@@ -45,24 +43,24 @@ def extract_language(prompt):
             return lang
     return None
 
-# Function to generate quiz questions without showing the correct answer
+# Function to generate quiz questions
 def generate_quiz(language):
     prompt = f"Generate a multiple-choice quiz with 10 questions on {language}. Provide options and indicate the correct answer."
     response = model.generate_content(prompt)
-
+    
+    # Split the response into individual questions
     questions = response.text.strip().split("\n\n")  # Assuming questions are separated by double newlines
     structured_questions = {}
-    display_texts = []
-
+    
     for i, q in enumerate(questions, start=1):
         match = re.search(r'Correct Answer:\s*(.*)', q)
         correct_answer = match.group(1) if match else "Unknown"
-        question_text = re.sub(r'Correct Answer:.*', '', q).strip()
-        structured_questions[i] = {"question": question_text, "answer": correct_answer}
-        display_texts.append(f"Q{i}. {question_text}")
-
+        structured_questions[i] = {"question": q, "answer": correct_answer}
+    
+    # Store structured questions in session state
     st.session_state.quiz_questions[language] = structured_questions
-    return "\n\n".join(display_texts)
+    
+    return "\n\n".join(q["question"] for q in structured_questions.values())  # Return formatted quiz text
 
 # Function to recommend learning resources
 def recommend_resources(language):
@@ -70,18 +68,7 @@ def recommend_resources(language):
     response = model.generate_content(prompt)
     return response.text
 
-# Function to evaluate user's quiz answer
-def evaluate_answer(language, question_number, user_answer):
-    questions = st.session_state.quiz_questions.get(language, {})
-    if question_number in questions:
-        correct_answer = questions[question_number]["answer"].strip().lower()
-        if user_answer.strip().lower() == correct_answer:
-            return "✅ Correct!"
-        else:
-            return f"❌ Incorrect. The correct answer is: {questions[question_number]['answer']}"
-    return "Question not found."
-
-# Function to extract question number from user input (used for explanation intent)
+# Function to extract question number from user input
 def extract_question_number(prompt):
     match = re.search(r'\bquestion (\d+)\b', prompt, re.IGNORECASE)
     return int(match.group(1)) if match else None
@@ -101,40 +88,28 @@ for message in st.session_state.messages:
 if prompt := st.chat_input("Say something..."):
     intent = detect_intent(prompt)
     language = extract_language(prompt)
-
+    
     if intent == "greeting":
         response_text = "Hello! How can I assist you today?"
-
+    
     elif intent == "learn":
         if language:
             response_text = recommend_resources(language)
         else:
             response_text = "Which programming language would you like to learn?"
-
+    
     elif intent == "quiz":
         if language:
             response_text = generate_quiz(language)
         else:
             response_text = "Which programming language quiz would you like to attempt?"
-
-    elif intent == "answer":
-        match = re.search(r'question\s*(\d+)\s*answer\s*[:\-]?\s*([a-dA-D])', prompt, re.IGNORECASE)
-        if match:
-            question_number = int(match.group(1))
-            user_answer = match.group(2)
-            if st.session_state.quiz_questions:
-                last_lang = list(st.session_state.quiz_questions.keys())[-1]
-                response_text = evaluate_answer(last_lang, question_number, user_answer)
-            else:
-                response_text = "No quiz found to evaluate. Please start a quiz first."
-        else:
-            response_text = "Please use the format like: 'Question 3 Answer: A'"
-
+    
     elif intent == "explain":
         question_number = extract_question_number(prompt)
         matched_question = None
         correct_answer = ""
 
+        # If the user provided a question number, find it
         if question_number:
             for lang, questions in st.session_state.quiz_questions.items():
                 if question_number in questions:
@@ -142,6 +117,7 @@ if prompt := st.chat_input("Say something..."):
                     correct_answer = questions[question_number]["answer"]
                     break
 
+        # If no number was found, check for direct question matches
         if not matched_question:
             for lang, questions in st.session_state.quiz_questions.items():
                 for q_num, q_data in questions.items():
