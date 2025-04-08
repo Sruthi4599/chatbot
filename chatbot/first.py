@@ -3,7 +3,7 @@ import google.generativeai as genai
 import re
 
 # Configure Gemini API
-API_KEY = "AIzaSyD9ZPsFRIDK5oaXbZriD_Ib1CjGzV0mejk"
+API_KEY = "YOUR_API_KEY_HERE"
 genai.configure(api_key=API_KEY)
 model = genai.GenerativeModel('gemini-1.5-flash')
 
@@ -26,13 +26,14 @@ st.write("Learn programming, take quizzes, and get answers explained!")
 
 # --- Utility Functions ---
 def detect_intent(prompt):
-    if any(greet in prompt.lower() for greet in ["hi", "hello", "hey"]):
+    prompt = prompt.lower()
+    if any(greet in prompt for greet in ["hi", "hello", "hey"]):
         return "greeting"
-    elif "learn" in prompt.lower():
+    elif "learn" in prompt:
         return "learn"
-    elif "quiz" in prompt.lower():
+    elif "quiz" in prompt:
         return "quiz"
-    elif "explain" in prompt.lower():
+    elif "explain" in prompt:
         return "explain"
     return "chat"
 
@@ -60,20 +61,15 @@ def generate_quiz(language):
             structured[i] = {
                 "question": question_text,
                 "full": q,
-                "answer": None  # No answer given yet
+                "answer": None
             }
 
     st.session_state.quiz_questions[language] = structured
     st.session_state.active_quiz_lang = language
 
 def recommend_resources(language):
-    prompt = f"Give YouTube videos, websites, and books to learn {language}. Include links (one per line)."
-    response = model.generate_content(prompt)
-    text = response.text
-    # Convert raw URLs to clickable markdown links
-    text = re.sub(r'(https?://[^\s]+)', r'[\1](\1)', text)
-    return text
-
+    prompt = f"Suggest some good YouTube videos, websites, and books to learn {language}. Provide clickable links using markdown format."
+    return model.generate_content(prompt).text
 
 def extract_question_number(prompt):
     match = re.search(r'\bquestion (\d+)\b', prompt, re.IGNORECASE)
@@ -83,7 +79,7 @@ def explain_answer(question_text, user_answer):
     prompt = f"Here's a quiz question:\n{question_text}\nI chose: {user_answer}\nExplain whether it's correct and why."
     return model.generate_content(prompt).text
 
-# --- Quiz Interface ---
+# --- Quiz UI ---
 def quiz_ui(language):
     questions = st.session_state.quiz_questions.get(language, {})
     st.subheader(f"{language} Quiz")
@@ -103,10 +99,11 @@ for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
         st.markdown(msg["content"])
 
-# --- Main Chat Input ---
+# --- Chat Input Logic ---
 if prompt := st.chat_input("Ask me to learn, quiz, or explain..."):
     intent = detect_intent(prompt)
     language = extract_language(prompt)
+    response_text = ""
 
     if intent == "greeting":
         response_text = "Hey there! Ready to learn or take a quiz?"
@@ -122,17 +119,34 @@ if prompt := st.chat_input("Ask me to learn, quiz, or explain..."):
             response_text = "Please mention which language you want the quiz in."
 
     elif intent == "explain":
+        lang = st.session_state.active_quiz_lang
         question_number = extract_question_number(prompt)
-        if question_number and st.session_state.active_quiz_lang:
-            lang = st.session_state.active_quiz_lang
-            question_data = st.session_state.quiz_questions[lang].get(question_number)
-            user_answer = st.session_state.user_answers.get(question_number)
-            if question_data and user_answer:
-                response_text = explain_answer(question_data["question"], user_answer)
+        found = False
+
+        # Try to explain quiz question
+        if lang:
+            questions = st.session_state.quiz_questions.get(lang, {})
+            if question_number:
+                q_data = questions.get(question_number)
+                user_answer = st.session_state.user_answers.get(question_number)
+                if q_data and user_answer:
+                    response_text = explain_answer(q_data["question"], user_answer)
+                    found = True
             else:
-                response_text = "Please submit your answer first before asking for an explanation."
-        else:
-            response_text = "Please specify which question you want explained (e.g., 'Explain question 2')."
+                for q_num, q_data in questions.items():
+                    if q_data["question"].strip() in prompt:
+                        user_answer = st.session_state.user_answers.get(q_num)
+                        if user_answer:
+                            response_text = explain_answer(q_data["question"], user_answer)
+                        else:
+                            response_text = "Please submit your answer first before asking for an explanation."
+                        found = True
+                        break
+
+        # Not a quiz question — treat it as a general programming/interview question
+        if not found:
+            explain_prompt = f"Explain this programming interview question clearly:\n{prompt}"
+            response_text = model.generate_content(explain_prompt).text
 
     else:
         response_text = model.generate_content(prompt).text
@@ -145,6 +159,6 @@ if prompt := st.chat_input("Ask me to learn, quiz, or explain..."):
     with st.chat_message("assistant"):
         st.markdown(response_text)
 
-# --- Show quiz below chat ---
+# --- Quiz Display at Bottom ---
 if st.session_state.active_quiz_lang:
     quiz_ui(st.session_state.active_quiz_lang)
