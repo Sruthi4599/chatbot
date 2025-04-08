@@ -3,7 +3,7 @@ import google.generativeai as genai
 import re
 
 # Configure Gemini API
-API_KEY = "YOUR_API_KEY_HERE"
+API_KEY = "AIzaSyD9ZPsFRIDK5oaXbZriD_Ib1CjGzV0mejk"
 genai.configure(api_key=API_KEY)
 model = genai.GenerativeModel('gemini-1.5-flash')
 
@@ -68,8 +68,12 @@ def generate_quiz(language):
     st.session_state.active_quiz_lang = language
 
 def recommend_resources(language):
-    prompt = f"Suggest some good YouTube videos, websites, and books to learn {language}. Provide clickable links using markdown format."
-    return model.generate_content(prompt).text
+    prompt = f"Give YouTube videos, websites, and books to learn {language}. Include links (one per line)."
+    response = model.generate_content(prompt)
+    text = response.text
+    # Convert raw URLs to clickable markdown links
+    text = re.sub(r'(https?://[^\s]+)', r'[\1](\1)', text)
+    return text
 
 def extract_question_number(prompt):
     match = re.search(r'\bquestion (\d+)\b', prompt, re.IGNORECASE)
