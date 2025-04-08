@@ -3,7 +3,7 @@ import google.generativeai as genai
 import re
 
 # Configure Gemini API
-API_KEY = "AIzaSyD9ZPsFRIDK5oaXbZriD_Ib1CjGzV0mejk"  # Replace with your Gemini API key
+API_KEY = "YOUR_API_KEY_HERE"
 genai.configure(api_key=API_KEY)
 model = genai.GenerativeModel('gemini-1.5-flash')
 
@@ -67,12 +67,8 @@ def generate_quiz(language):
     st.session_state.active_quiz_lang = language
 
 def recommend_resources(language):
-    prompt = f"Give YouTube videos, websites, and books to learn {language}. Include links (one per line)."
-    response = model.generate_content(prompt)
-    text = response.text
-    # Convert raw URLs to clickable markdown links
-    text = re.sub(r'(https?://[^\s]+)', r'[\1](\1)', text)
-    return text
+    prompt = f"Give YouTube videos, websites, and books to learn {language}. Include clickable links."
+    return model.generate_content(prompt).text
 
 def extract_question_number(prompt):
     match = re.search(r'\bquestion (\d+)\b', prompt, re.IGNORECASE)
@@ -136,7 +132,6 @@ if prompt := st.chat_input("Ask me to learn, quiz, or explain..."):
     else:
         response_text = model.generate_content(prompt).text
 
-    # Save and display messages
     st.session_state.messages.append({"role": "user", "content": prompt})
     st.session_state.messages.append({"role": "assistant", "content": response_text})
 
