@@ -67,8 +67,10 @@ def generate_quiz(language):
     st.session_state.active_quiz_lang = language
 
 def recommend_resources(language):
-    prompt = f"Give YouTube videos, websites, and books to learn {language}. Include clickable links."
-    return model.generate_content(prompt).text
+    prompt = f"Recommend YouTube videos, websites, and books for learning {language}. Provide direct links to access them."
+    response = model.generate_content(prompt)
+    return response.text
+
 
 def extract_question_number(prompt):
     match = re.search(r'\bquestion (\d+)\b', prompt, re.IGNORECASE)
