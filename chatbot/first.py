@@ -3,13 +3,13 @@ import google.generativeai as genai
 import re
 
 # Configure Gemini API
-API_KEY = "AIzaSyD9ZPsFRIDK5oaXbZriD_Ib1CjGzV0mejk"
+API_KEY = "YOUR_API_KEY"
 genai.configure(api_key=API_KEY)
 model = genai.GenerativeModel('gemini-1.5-flash')
 
 SUPPORTED_LANGUAGES = ["Python", "Java", "C++", "JavaScript", "C"]
 
-# Session state setup
+# Initialize session state
 if "chat" not in st.session_state:
     st.session_state.chat = model.start_chat(history=[])
 
@@ -25,24 +25,22 @@ if "user_answers" not in st.session_state:
 if "active_quiz_lang" not in st.session_state:
     st.session_state.active_quiz_lang = None
 
+if "mode" not in st.session_state:
+    st.session_state.mode = "idle"
+
 st.title("🤖 CodeGenie - Your AI Learning Assistant")
 st.write("Welcome! Learn programming or test your knowledge with quizzes.")
 
-# --- Helper Functions ---
-
+# Detect user intent
 def detect_intent(prompt):
-    prompt_lower = prompt.lower()
-
-    if "explain" in prompt_lower or extract_question_number(prompt):
+    if "explain" in prompt.lower() or extract_question_number(prompt):
         return "explain"
-
-    greetings = ["hi", "hello", "hey"]
-    if any(greet in prompt_lower for greet in greetings):
-        return "greeting"
-    elif "learn" in prompt_lower:
-        return "learn"
-    elif "quiz" in prompt_lower:
+    elif "quiz" in prompt.lower():
         return "quiz"
+    elif "learn" in prompt.lower():
+        return "learn"
+    elif any(greet in prompt.lower() for greet in ["hi", "hello", "hey"]):
+        return "greeting"
     return "chat"
 
 def extract_language(prompt):
@@ -54,39 +52,37 @@ def extract_language(prompt):
 def generate_quiz(language):
     prompt = (
         f"Create a 10-question multiple-choice quiz on {language}. "
-        f"Each question must have 4 options labeled A, B, C, D. "
-        f"Indicate the correct answer at the end using 'Correct Answer: <Letter>'. "
-        f"Format:\n1. Question?\nA. Option\nB. Option\nC. Option\nD. Option\nCorrect Answer: B\n"
+        f"Each question should have 4 options labeled A, B, C, D. "
+        f"Include the correct answer using 'Correct Answer: <Letter>'."
     )
     response = model.generate_content(prompt)
     raw_questions = response.text.strip().split("\n\n")
-    structured_questions = {}
+    structured = {}
 
-    for i, q in enumerate(raw_questions, start=1):
-        match = re.search(r'Correct Answer:\s*([A-Da-d])', q)
-        correct_answer = match.group(1).upper() if match else "Unknown"
-        question_text = re.sub(r'Correct Answer:.*', '', q).strip()
-        structured_questions[i] = {"question": question_text, "answer": correct_answer}
+    for i, block in enumerate(raw_questions, 1):
+        match = re.search(r'Correct Answer:\s*([A-Da-d])', block)
+        correct = match.group(1).upper() if match else "A"
+        question_text = re.sub(r'Correct Answer:.*', '', block).strip()
+        structured[i] = {"question": question_text, "answer": correct}
 
-    st.session_state.quiz_questions[language] = structured_questions
+    st.session_state.quiz_questions[language] = structured
     st.session_state.active_quiz_lang = language
+    st.session_state.mode = "quiz"
 
 def quiz_ui(language):
     questions = st.session_state.quiz_questions.get(language, {})
     if not questions:
-        st.warning("Please generate a quiz first.")
+        st.warning("Generate a quiz first.")
         return
 
     st.subheader(f"{language} Quiz")
-
     for q_num, q_data in questions.items():
         with st.expander(f"Question {q_num}"):
             st.markdown(q_data["question"])
-            options = ['A', 'B', 'C', 'D']
             selected = st.radio(
-                f"Your answer for Q{q_num}:", options, key=f"answer_{q_num}"
+                f"Choose your answer for Q{q_num}:", ["A", "B", "C", "D"],
+                key=f"answer_{q_num}"
             )
-
             if st.button(f"Submit Q{q_num}", key=f"submit_{q_num}"):
                 correct = q_data["answer"]
                 if selected == correct:
@@ -96,7 +92,7 @@ def quiz_ui(language):
                 st.session_state.user_answers[q_num] = selected
 
 def recommend_resources(language):
-    prompt = f"Recommend YouTube videos, websites, and books for learning {language}. Provide direct links."
+    prompt = f"Recommend YouTube videos, websites, and books for learning {language}. Include direct links."
     response = model.generate_content(prompt)
     return response.text
 
@@ -109,55 +105,60 @@ def explain_answer(question_text, correct_answer):
     response = model.generate_content(prompt)
     return response.text
 
-# --- Chat History Display ---
-for message in st.session_state.messages:
-    with st.chat_message(message["role"]):
-        st.markdown(message["content"])
+# Display chat history
+for msg in st.session_state.messages:
+    with st.chat_message(msg["role"]):
+        st.markdown(msg["content"])
 
-# --- Chat Input ---
+# Chat input
 if prompt := st.chat_input("Say something..."):
     intent = detect_intent(prompt)
     language = extract_language(prompt)
+    response_text = ""
 
     if intent == "greeting":
-        response_text = "Hello! How can I assist you today?"
+        response_text = "Hello! How can I help you today?"
 
     elif intent == "learn":
-        response_text = recommend_resources(language) if language else "Which programming language would you like to learn?"
+        if language:
+            response_text = recommend_resources(language)
+        else:
+            response_text = "Which language do you want to learn?"
 
     elif intent == "quiz":
         if language:
             generate_quiz(language)
-            response_text = f"Here is your {language} quiz!"
+            response_text = f"Quiz generated for {language}. Scroll down to attempt it."
         else:
-            response_text = "Which programming language quiz would you like to attempt?"
+            response_text = "Which language quiz would you like?"
 
     elif intent == "explain":
         question_number = extract_question_number(prompt)
-        matched_question = None
-        correct_answer = ""
+        matched_q = None
+        correct = ""
 
         for lang, questions in st.session_state.quiz_questions.items():
             for q_num, q_data in questions.items():
                 if question_number and q_num == question_number:
-                    matched_question = q_data["question"]
-                    correct_answer = q_data["answer"]
+                    matched_q = q_data["question"]
+                    correct = q_data["answer"]
                     break
-                elif q_data["question"].lower().startswith(prompt.lower()[:20]):
-                    matched_question = q_data["question"]
-                    correct_answer = q_data["answer"]
+                elif prompt.strip().lower()[:20] in q_data["question"].lower():
+                    matched_q = q_data["question"]
+                    correct = q_data["answer"]
                     break
-            if matched_question:
+            if matched_q:
                 break
 
-        if matched_question:
-            response_text = explain_answer(matched_question, correct_answer)
+        if matched_q:
+            response_text = explain_answer(matched_q, correct)
         else:
-            response_text = "Please specify the exact quiz question number or paste the full question for explanation."
+            response_text = "Please specify a valid question number or paste the question."
 
     else:
         response_text = model.generate_content(prompt).text
 
+    # Show conversation
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
         st.markdown(prompt)
@@ -166,6 +167,6 @@ if prompt := st.chat_input("Say something..."):
     with st.chat_message("assistant"):
         st.markdown(response_text)
 
-# --- Keep Quiz Visible ---
+# Keep quiz visible
 if st.session_state.active_quiz_lang:
     quiz_ui(st.session_state.active_quiz_lang)
