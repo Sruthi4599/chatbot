@@ -3,7 +3,7 @@ import google.generativeai as genai
 import re
 
 # Configure Gemini API
-API_KEY = "AIzaSyD9ZPsFRIDK5oaXbZriD_Ib1CjGzV0mejk"  # Replace with your actual API key
+API_KEY = "YOUR_API_KEY"  # Replace with your actual API key
 genai.configure(api_key=API_KEY)
 model = genai.GenerativeModel('gemini-1.5-flash')
 
@@ -12,16 +12,12 @@ SUPPORTED_LANGUAGES = ["Python", "Java", "C++", "JavaScript", "C"]
 # Session State Initialization
 if "chat" not in st.session_state:
     st.session_state.chat = model.start_chat(history=[])
-
 if "messages" not in st.session_state:
     st.session_state.messages = []
-
 if "quiz_questions" not in st.session_state:
     st.session_state.quiz_questions = {}
-
 if "user_answers" not in st.session_state:
     st.session_state.user_answers = {}
-
 if "active_quiz_lang" not in st.session_state:
     st.session_state.active_quiz_lang = None
 
@@ -41,7 +37,6 @@ def detect_intent(prompt):
         return "explain"
     return "chat"
 
-# Extract language
 def extract_language(prompt):
     for lang in SUPPORTED_LANGUAGES:
         if lang.lower() in prompt.lower():
@@ -78,15 +73,11 @@ def quiz_ui(language):
         return
 
     st.subheader(f"{language} Quiz")
-
     for q_num, q_data in questions.items():
-        with st.expander(f"Question {q_num}"):
+        with st.expander(f"Question {q_num}", expanded=False):
             st.markdown(q_data["question"])
             options = ['A', 'B', 'C', 'D']
-            selected = st.radio(
-                f"Your answer for Q{q_num}:", options, key=f"answer_{q_num}"
-            )
-
+            selected = st.radio(f"Your answer for Q{q_num}:", options, key=f"answer_{q_num}")
             if st.button(f"Submit Q{q_num}", key=f"submit_{q_num}"):
                 correct = q_data["answer"]
                 if selected == correct:
@@ -95,11 +86,34 @@ def quiz_ui(language):
                     st.error(f"❌ Incorrect. Correct answer is {correct}")
                 st.session_state.user_answers[q_num] = selected
 
-# Recommend Resources with Clickable Links
+# Recommend Learning Resources with Clickable Links
 def recommend_resources(language):
-    prompt = f"Recommend top YouTube videos, websites, and books for learning {language}. Provide clickable links."
-    response = model.generate_content(prompt)
-    return response.text
+    # Predefined resource links for demonstration.
+    resources = {
+        "Python": (
+            "[Python Official Docs](https://docs.python.org/3/)\n"
+            "[W3Schools - Python](https://www.w3schools.com/python/)\n"
+            "[Corey Schafer YouTube](https://www.youtube.com/user/schafer5)"
+        ),
+        "Java": (
+            "[Java Official Docs](https://docs.oracle.com/javase/8/docs/)\n"
+            "[GeeksforGeeks - Java](https://www.geeksforgeeks.org/java/)"
+        ),
+        "C++": (
+            "[cplusplus.com](http://www.cplusplus.com/)\n"
+            "[LearnCPP](https://www.learncpp.com/)"
+        ),
+        "JavaScript": (
+            "[MDN JavaScript](https://developer.mozilla.org/en-US/docs/Web/JavaScript)\n"
+            "[JavaScript Info](https://javascript.info/)"
+        ),
+        "C": (
+            "[Learn-C.org](https://www.learn-c.org/)\n"
+            "[TutorialsPoint C](https://www.tutorialspoint.com/cprogramming/index.htm)"
+        )
+    }
+    # Return resources as a markdown-formatted string
+    return resources.get(language, "No resources available for this language.")
 
 # Explain a Quiz Question
 def extract_question_number(prompt):
@@ -111,12 +125,11 @@ def explain_answer(question_text, correct_answer):
     response = model.generate_content(prompt)
     return response.text
 
-# Display Previous Chat Messages
-for message in st.session_state.messages:
-    with st.chat_message(message["role"]):
-        st.markdown(message["content"])
+# --- Display Quiz Interface at the Top ---
+if st.session_state.active_quiz_lang:
+    quiz_ui(st.session_state.active_quiz_lang)
 
-# Chat Input
+# --- Chat Input ---
 if prompt := st.chat_input("Say something..."):
     intent = detect_intent(prompt)
     language = extract_language(prompt)
@@ -124,48 +137,40 @@ if prompt := st.chat_input("Say something..."):
 
     if intent == "greeting":
         response_text = "Hello! How can I assist you today?"
-
     elif intent == "learn":
         response_text = recommend_resources(language) if language else "Which programming language would you like to learn?"
-
     elif intent == "quiz":
         if language:
             generate_quiz(language)
             response_text = f"Here is your {language} quiz!"
         else:
             response_text = "Which programming language quiz would you like to attempt?"
-
     elif intent == "explain":
         question_number = extract_question_number(prompt)
         matched_question = None
         correct_answer = ""
-
         if question_number:
             for lang, questions in st.session_state.quiz_questions.items():
                 if question_number in questions:
                     matched_question = questions[question_number]["question"]
                     correct_answer = questions[question_number]["answer"]
                     break
-
         if matched_question:
             response_text = explain_answer(matched_question, correct_answer)
         else:
-            response_text = "Please specify the question number clearly or paste the full question."
-
+            response_text = "Please specify the question number or paste the full question for explanation."
     else:
         response_text = model.generate_content(prompt).text
 
-    # Store user and bot messages
     st.session_state.messages.append({"role": "user", "content": prompt})
     st.session_state.messages.append({"role": "assistant", "content": response_text})
 
-    # Display after storing so it appears at the end
     with st.chat_message("user"):
         st.markdown(prompt)
-
     with st.chat_message("assistant"):
         st.markdown(response_text)
 
-# Show quiz interface at the end to keep it visible
-if st.session_state.active_quiz_lang:
-    quiz_ui(st.session_state.active_quiz_lang)
+# --- Display Chat Messages After the Quiz ---
+for message in st.session_state.messages:
+    with st.chat_message(message["role"]):
+        st.markdown(message["content"])
