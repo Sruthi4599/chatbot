@@ -9,7 +9,8 @@ from datetime import datetime
 # -----------------------------
 # Configure Gemini Model
 # -----------------------------
-genai.configure()
+genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
+
 
 model = genai.GenerativeModel(model_name="gemini-flash-latest")
 
