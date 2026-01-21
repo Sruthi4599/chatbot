@@ -3,13 +3,13 @@ import json
 import re
 import google.generativeai as genai
 from utils import init_db, register_user, authenticate_user, save_score, get_scores
-import pandas as pd
+
 from datetime import datetime
 
 # -----------------------------
 # Configure Gemini Model
 # -----------------------------
-genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
+genai.configure(api_key=st.secrets["GOOGLE_API_KEY"])
 
 
 model = genai.GenerativeModel(model_name="gemini-flash-latest")
@@ -202,26 +202,46 @@ if "user_id" in st.session_state:
         scores = get_scores(st.session_state["user_id"])
 
         if scores:
+    # scores format:
+    # [(topic, score, total, date), ...]
 
-            df = pd.DataFrame(scores, columns=["Topic", "Score", "Total", "Date"])
-
-            # ---------------- FILTER BY SUBJECT ----------------
-            all_topics = df["Topic"].unique()
+    # ----------- FILTER BY TOPIC -----------
+            all_topics = sorted(set(row[0] for row in scores))
             selected_topic = st.selectbox("Select Topic:", all_topics)
 
-            df_topic = df[df["Topic"] == selected_topic]
+            filtered_scores = [
+                (topic, score, total, date)
+                for (topic, score, total, date) in scores
+                if topic == selected_topic
+            ]
 
+            # ----------- SCOREBOARD TABLE -----------
             st.subheader("📑 Scoreboard")
-            st.dataframe(df_topic)
 
-            # Plot graph
+            table_data = [
+                {
+                    "Topic": topic,
+                    "Score": score,
+                    "Total": total,
+                    "Date": date
+                }
+                for (topic, score, total, date) in filtered_scores
+            ]
+
+            st.table(table_data)
+
+            # ----------- PERFORMANCE GRAPH -----------
             st.subheader(f"📈 Performance Graph – {selected_topic}")
-            df_topic["Percentage"] = df_topic["Score"] / df_topic["Total"] * 100
-            df_topic["Date"] = pd.to_datetime(df_topic["Date"])
 
-            st.line_chart(df_topic.set_index("Date")["Percentage"])
+            percentages = [(score / total) * 100 for (_, score, total, _) in filtered_scores]
+
+            st.line_chart({
+                "Percentage": percentages
+            })
+
         else:
             st.info("No quiz scores yet.")
+
 
 else:
     st.info("Please login to access the app.")
