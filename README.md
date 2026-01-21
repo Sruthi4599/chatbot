@@ -1,3 +1,3 @@
 # CodeGenie App
 
-Check out the **live demo** here: [Live Demo](https://codegenie-4cxrn8zwejegaa7qjqcqr9.streamlit.app/)
+Check out the **live demo** here: [Live Demo](https://chatbot-6j7cgtitk8rrculywm7xdd.streamlit.app/)
